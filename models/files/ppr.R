@@ -5,7 +5,7 @@ modelInfo <- list(label = "Projection Pursuit Regression",
                   parameters = data.frame(parameter = c('nterms'),
                                           class = c('numeric'),
                                           label = c('# Terms')),
-                  grid = function(x, y, len = NULL) data.frame(nterms = 1:len),
+                  grid = function(x, y, len = NULL, search = "grid") data.frame(nterms = 1:len),
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     if(!is.null(wts))
                     {
@@ -22,5 +22,5 @@ modelInfo <- list(label = "Projection Pursuit Regression",
                   predict = function(modelFit, newdata, submodels = NULL) predict(modelFit, newdata),
                   prob = NULL,
                   predictors = function(x, ...) x$xnames,
-                  tags = "Feature Extraction",
+                  tags = c("Feature Extraction", "Accepts Case Weights"),
                   sort = function(x) x[order(x[,1]),])

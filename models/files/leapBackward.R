@@ -4,7 +4,14 @@ modelInfo <- list(label = "Linear Regression with Backwards Selection",
                   parameters = data.frame(parameter = 'nvmax',
                                           class = "numeric",
                                           label = 'Maximum Number of Predictors'),
-                  grid = function(x, y, len = NULL) data.frame(nvmax = 2:(len+1)),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- data.frame(nvmax = 2:(len+1))
+                    } else {
+                      out <- data.frame(nvmax = sort(unique(sample(2:(ncol(x) - 1), size = len, replace = TRUE))))
+                    }
+                    out
+                    },
                   loop = function(grid) {   
                     grid <- grid[order(grid$nvmax, decreasing = TRUE),, drop = FALSE]
                     loop <- grid[1,,drop = FALSE]
@@ -16,25 +23,26 @@ modelInfo <- list(label = "Linear Regression with Backwards Selection",
                     if(any(names(theDots) == "nbest")) stop("'nbest' should not be specified")
                     if(any(names(theDots) == "method")) stop("'method' should not be specified")
                     if(any(names(theDots) == "nvmax")) stop("'nvmax' should not be specified")
-                  
-                    regsubsets(x, y,
+
+                    leaps::regsubsets(as.matrix(x), y,
                                weights = if(!is.null(wts)) wts else rep(1, length(y)),
                                nbest = 1, nvmax = param$nvmax, method = "backward", ...)
                     },
                   predict = function(modelFit, newdata, submodels = NULL) {
+                    newdata <- as.matrix(newdata)
                     foo <- function(b, x) x[,names(b),drop = FALSE] %*% b
                     path <- 1:(modelFit$nvmax - 1)
                     betas <- coef(modelFit, id = 1:(modelFit$nvmax - 1))
                     
-                    newdata <- cbind(rep(1, nrow(newdata)), as.matrix(newdata))
+                    newdata <- cbind(rep(1, nrow(newdata)), newdata)
                     colnames(newdata)[1] <- "(Intercept)"
                     
                     out <- foo(betas[[length(betas)]], newdata)[,1]
                     
-                    if(!is.null(submodels))
-                    {
+                    if(!is.null(submodels)) {
                       numTerms <- unlist(lapply(betas, length))
-                      if(any(names(betas[[length(betas)]]) == "(Intercept)")) numTerms <- numTerms - 1
+                      if(any(names(betas[[length(betas)]]) == "(Intercept)")) 
+                        numTerms <- numTerms - 1
                       ## Need to find the elements of betas that 
                       ## correspond to the values of submodels$nvmax
                       
@@ -49,6 +57,7 @@ modelInfo <- list(label = "Linear Regression with Backwards Selection",
                       preds <- do.call("cbind", preds)
                       
                       out <- as.data.frame(cbind(out, preds))
+                      out <- as.list(out)
                     }
                     
                     out

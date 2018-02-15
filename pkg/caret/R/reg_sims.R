@@ -1,15 +1,15 @@
 
-
+#' @importFrom stats rnorm toeplitz
 make_noise <- function(n, noiseVars = 0, 
                        corrVars = 0, corrType = "AR1", corrValue = 0,
                        binary = FALSE) {
-  requireNamespace("MASS", quietly = TRUE)
+  requireNamespaceQuietStop("MASS")
   if(noiseVars > 0) {
     tmpData <- matrix(rnorm(n * noiseVars), ncol = noiseVars)
     colnames(tmpData) <- well_numbered("Noise", noiseVars)
   }
   if(corrVars > 0) {
-    library(MASS)
+    loadNamespace("MASS")
     if(corrType == "exch") {
       vc <- matrix(corrValue, ncol = corrVars,  nrow = corrVars)
       diag(vc) <- 1
@@ -28,7 +28,9 @@ make_noise <- function(n, noiseVars = 0,
   as.data.frame(out)
 }
 
-
+#' @rdname twoClassSim
+#' @importFrom stats rnorm
+#' @export
 SLC14_1 <- function(n = 100, noiseVars = 0, 
                     corrVars = 0, corrType = "AR1", corrValue = 0) {
   
@@ -54,6 +56,9 @@ SLC14_1 <- function(n = 100, noiseVars = 0,
   dat
 }
 
+#' @rdname twoClassSim
+#' @importFrom stats rnorm
+#' @export
 SLC14_2 <- function(n = 100, noiseVars = 0, 
                     corrVars = 0, corrType = "AR1", corrValue = 0) {
   
@@ -72,9 +77,11 @@ SLC14_2 <- function(n = 100, noiseVars = 0,
   dat
 }
 
-
+#' @rdname twoClassSim
+#' @importFrom stats rbinom rnorm runif binomial
+#' @export
 LPH07_1 <- function(n = 100, noiseVars = 0, 
-                    corrVars = 0, corrType = "AR1", corrValue = 0) {
+                    corrVars = 0, corrType = "AR1", corrValue = 0, factors = FALSE, class = FALSE) {
   
   dat <- matrix(rbinom(n*10, size = 1, prob = .4), ncol = 10)
   dat <- as.data.frame(dat)
@@ -90,12 +97,25 @@ LPH07_1 <- function(n = 100, noiseVars = 0,
                                  corrType = corrType, 
                                  corrValue = corrValue,
                                  binary = TRUE))
+
+  if(class) {   
+    dat$y <- apply(dat[, 1:10], 1, foo) 
+    dat$Class <- runif(nrow(dat)) <= binomial()$linkinv(dat$y)
+    dat$Class <- factor(ifelse(dat$Class, "Class1", "Class2"))
+    dat$y <- NULL
+  } else dat$y <- apply(dat[, 1:10], 1, foo) + rnorm(n)
   
-  dat$y <- apply(dat[, 1:10], 1, foo) + rnorm(n)
+  if(factors) 
+    for(i in grep("(^Var)|(^Noise)", names(dat), value = TRUE))
+      dat[,i] <- factor(paste0("val", dat[,i]))
+  
+  
   dat
 }
 
-
+#' @rdname twoClassSim
+#' @importFrom stats rnorm
+#' @export
 LPH07_2 <- function(n = 100, noiseVars = 0, 
                     corrVars = 0, corrType = "AR1", corrValue = 0) {
   

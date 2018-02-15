@@ -5,17 +5,17 @@ modelInfo <- list(label = "Sparse Linear Discriminant Analysis",
                   parameters = data.frame(parameter = c('NumVars', 'lambda'),
                                           class = c("numeric", "numeric"),
                                           label = c('# Predictors', 'Lambda')),
-                  grid = function(x, y, len = NULL){
-                    p <- ncol(x) 
-                    if(p <= len)
-                    { 
-                      tuneSeq <- floor(seq(2, to = p, length = p))
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- expand.grid(NumVars = caret::var_seq(p = ncol(x), 
+                                                                  classification = is.factor(y), 
+                                                                  len = len),
+                                         lambda = c(0, 10 ^ seq(-1, -4, length = len - 1)))
                     } else {
-                      if(p < 500 ) tuneSeq <- floor(seq(2, to = p, length = len))
-                      else tuneSeq <- floor(2^seq(1, to = log(p, base = 2), length = len))
+                      out <- data.frame(lambda = 10^runif(len, min = -5, 1),
+                                        NumVars = sample(1:ncol(x), size = len, replace = TRUE))
                     }
-                    expand.grid(NumVars = tuneSeq,
-                                lambda = c(0, 10 ^ seq(-1, -4, length = len - 1)))
+                    out
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) 
                     sparseLDA:::sda(x, y, 
@@ -28,6 +28,7 @@ modelInfo <- list(label = "Sparse Linear Discriminant Analysis",
                     sparseLDA:::predict.sda(modelFit, newdata)$class,
                   prob = function(modelFit, newdata, submodels = NULL)
                     sparseLDA:::predict.sda(modelFit, newdata)$posterior,
+                  levels = function(x) x$obsLevels,
                   tags = c("Discriminant Analysis", "L1 Regularization", 
                            "Implicit Feature Selection", "Linear Classifier"),
                   sort = function(x) x[order(x$NumVars, -x$lambda),])

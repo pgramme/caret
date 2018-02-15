@@ -4,8 +4,14 @@ modelInfo <- list(label = "Principal Component Analysis",
                   parameters = data.frame(parameter = 'ncomp',
                                           class = "numeric",
                                           label = '#Components'),
-                  grid = function(x, y, len = NULL) 
-                    data.frame(ncomp = seq(1, min(ncol(x) - 1, len), by = 1)),
+                  grid = function(x, y, len = NULL, search = "grid")  {
+                    if(search == "grid") {
+                      out <- data.frame(ncomp = seq(1, min(ncol(x) - 1, len), by = 1))
+                    } else {
+                      out <- data.frame(ncomp = unique(sample(1:(ncol(x)-1), size = len, replace = TRUE)))
+                    }
+                    out
+                  },
                   loop = function(grid) {     
                     grid <- grid[order(grid$ncomp, decreasing = TRUE),, drop = FALSE]
                     loop <- grid[1,,drop = FALSE]
@@ -15,7 +21,7 @@ modelInfo <- list(label = "Principal Component Analysis",
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
                     dat$.outcome <- y
-                    pcr(.outcome ~ ., data = dat, ncomp = param$ncomp, ...)
+                    pls::pcr(.outcome ~ ., data = dat, ncomp = param$ncomp, ...)
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     out <- as.vector(pls:::predict.mvr(modelFit, newdata, ncomp = max(modelFit$ncomp)))

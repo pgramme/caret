@@ -1,7 +1,7 @@
 modelInfo <- list(label = "C5.0", 
                   library = c("C50", "plyr"),
                   loop = function(grid) {     
-                    loop <- ddply(grid, c("model", "winnow"),
+                    loop <- plyr::ddply(grid, c("model", "winnow"),
                                   function(x) c(trials = max(x$trials)))                 
                     
                     submodels <- vector(mode = "list", length = nrow(loop))
@@ -18,9 +18,16 @@ modelInfo <- list(label = "C5.0",
                   parameters = data.frame(parameter = c('trials', 'model', 'winnow'),
                                           class = c("numeric", "character", "logical"),
                                           label = c('# Boosting Iterations', 'Model Type', 'Winnow')),
-                  grid = function(x, y, len = NULL) {
-                    c5seq <- if(len == 1)  1 else  c(1, 10*((2:min(len, 11)) - 1))
-                    expand.grid(trials = c5seq, model = c("tree", "rules"), winnow = c(TRUE, FALSE))
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      c5seq <- if(len == 1)  1 else  c(1, 10*((2:min(len, 11)) - 1))
+                      out <- expand.grid(trials = c5seq, model = c("tree", "rules"), winnow = c(TRUE, FALSE))
+                    } else {
+                      out <- data.frame(trials = sample(1:100, replace = TRUE, size = len),
+                                        model = sample(c("tree", "rules"), replace = TRUE, size = len),
+                                        winnow = sample(c(TRUE, FALSE), replace = TRUE, size = len))
+                    }
+                    out
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
                     theDots <- list(...)
@@ -28,12 +35,12 @@ modelInfo <- list(label = "C5.0",
                     if(any(names(theDots) == "control"))
                     {                           
                       theDots$control$winnow <- param$winnow
-                    } else theDots$control <- C5.0Control(winnow = param$winnow)
+                    } else theDots$control <- C50::C5.0Control(winnow = param$winnow)
                     argList <- list(x = x, y = y, weights = wts, trials = param$trials,
                                     rules = param$model == "rules")
                     argList <- c(argList, theDots)
-                    do.call("C5.0.default", argList)
-                    },
+                    do.call(C50:::C5.0.default, argList)
+                  },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     out <- predict(modelFit, newdata)
                     
@@ -64,14 +71,22 @@ modelInfo <- list(label = "C5.0",
                     }
                     out
                   },
+                  levels = function(x) x$obsLevels,
                   predictors = function(x, ...) {
-                    vars <- C5imp(x, metric = "splits")
+                    vars <- C50::C5imp(x, metric = "splits")
                     rownames(vars)[vars$Overall > 0]
                   },
-                  varImp = function(object, ...) C5imp(object, ...),
+                  varImp = function(object, ...) C50::C5imp(object, ...),
                   tags = c("Tree-Based Model", "Rule-Based Model", "Implicit Feature Selection",
-                  	       "Boosting", "Ensemble Model"),
+                           "Boosting", "Ensemble Model", "Handle Missing Predictor Data", "Accepts Case Weights"),
                   sort = function(x) {
                     x$model <- factor(as.character(x$model), levels = c("rules", "tree"))
                     x[order(x$trials, x$model, !x$winnow),]
+                  },
+                  trim = function(x) {
+                    x$boostResults <- NULL
+                    x$size <- NULL
+                    x$call <- NULL
+                    x$output <- NULL
+                    x
                   })

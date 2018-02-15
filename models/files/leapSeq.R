@@ -4,7 +4,14 @@ modelInfo <- list(label = "Linear Regression with Stepwise Selection",
                   parameters = data.frame(parameter = 'nvmax',
                                           class = "numeric",
                                           label = 'Maximum Number of Predictors'),
-                  grid = function(x, y, len = NULL) data.frame(nvmax = 2:(len+1)),
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- data.frame(nvmax = 2:(len+1))
+                    } else {
+                      out <- data.frame(nvmax = sort(unique(sample(2:(ncol(x) - 1), size = len, replace = TRUE))))
+                    }
+                    out
+                  },
                   loop = function(grid) {   
                     grid <- grid[order(grid$nvmax, decreasing = TRUE),, drop = FALSE]
                     loop <- grid[1,,drop = FALSE]
@@ -17,11 +24,12 @@ modelInfo <- list(label = "Linear Regression with Stepwise Selection",
                     if(any(names(theDots) == "method")) stop("'method' should not be specified")
                     if(any(names(theDots) == "nvmax")) stop("'nvmax' should not be specified")
                   
-                    regsubsets(x, y,
+                    leaps::regsubsets(as.matrix(x), y,
                                weights = if(!is.null(wts)) wts else rep(1, length(y)),
                                nbest = 1, nvmax = param$nvmax, method = "seqrep", ...)
                     },
                   predict = function(modelFit, newdata, submodels = NULL) {
+                    newdata <- as.matrix(newdata)
                     foo <- function(b, x) x[,names(b),drop = FALSE] %*% b
                     
                     path <- 1:(modelFit$nvmax - 1)
@@ -50,6 +58,7 @@ modelInfo <- list(label = "Linear Regression with Stepwise Selection",
                       preds <- do.call("cbind", preds)
                       
                       out <- as.data.frame(cbind(out, preds))
+                      out <- as.list(out)
                     }
                     
                     out

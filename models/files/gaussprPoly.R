@@ -4,24 +4,30 @@ modelInfo <- list(label = "Gaussian Process with Polynomial Kernel",
                   parameters = data.frame(parameter = c('degree', 'scale'),
                                           class = c("numeric", "numeric"),
                                           label = c('Polynomial Degree', 'Scale')),
-                  grid = function(x, y, len = NULL) {
-                    expand.grid(degree = seq(1, min(len, 3)),      
-                                scale = 10 ^((1:len) - 4))
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- expand.grid(degree = seq(1, min(len, 3)),      
+                                         scale = 10 ^((1:len) - 4))
+                    } else {
+                      out <- data.frame(degree = sample(1:3, size = len, replace = TRUE),
+                                        scale = 10^runif(len, min = -5, 0))
+                    }
+                    out
                   },
                   loop = NULL,
-                  fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
-                    gausspr(x = as.matrix(x), y = y,
-                            kernel = polydot(degree = param$degree,
-                                             scale = param$scale,
-                                             offset = 1), ...)         
+                  fit = function(x, y, wts, param, lev, last, classProbs, ...) {
+                    kernlab::gausspr(x = as.matrix(x), y = y,
+                                     kernel = kernlab::polydot(degree = param$degree,
+                                                       scale = param$scale,
+                                                       offset = 1), ...)         
                     },
                   predict = function(modelFit, newdata, submodels = NULL) {  
-                    out <- predict(modelFit, as.matrix(newdata))
+                    out <- kernlab::predict(modelFit, as.matrix(newdata))
                     if(is.matrix(out)) out <- out[,1]
                     out
                   },
                   prob = function(modelFit, newdata, submodels = NULL) {
-                    predict(modelFit, as.matrix(newdata), type = "probabilities")
+                    kernlab::predict(modelFit, as.matrix(newdata), type = "probabilities")
                   },
                   predictors = function(x, ...) {
                     if(hasTerms(x) & !is.null(x@terms))

@@ -4,22 +4,28 @@ modelInfo <- list(label = "CART",
                   parameters = data.frame(parameter = c('maxdepth'),
                                           class = c("numeric"),
                                           label = c("Max Tree Depth")),
-                  grid = function(x, y, len = NULL){
+                  grid = function(x, y, len = NULL, search = "grid"){
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
                     dat$.outcome <- y
-                    initialFit <- rpart(.outcome ~ .,
-                                        data = dat,
-                                        control = rpart.control(cp = 0))$cptable
+                    initialFit <- rpart::rpart(.outcome ~ .,
+                                               data = dat,
+                                               control = rpart::rpart.control(cp = 0))$cptable
                     initialFit <- initialFit[order(-initialFit[,"CP"]), "nsplit", drop = FALSE]
                     initialFit <- initialFit[initialFit[,"nsplit"] > 0 & initialFit[,"nsplit"] <= 30, , drop = FALSE]
-                    if(dim(initialFit)[1] < len)
-                    {
-                      cat("note: only", nrow(initialFit),
-                        "possible values of the max tree depth from the initial fit.\n",
-                        "Truncating the grid to", nrow(initialFit), ".\n\n")
-                      tuneSeq <-  as.data.frame(initialFit)
-                    } else tuneSeq <-  as.data.frame(initialFit[1:len,])
-                    colnames(tuneSeq) <- "maxdepth"
+                    
+                    if(search == "grid") {
+                      
+                      if(dim(initialFit)[1] < len) {
+                        cat("note: only", nrow(initialFit),
+                            "possible values of the max tree depth from the initial fit.\n",
+                            "Truncating the grid to", nrow(initialFit), ".\n\n")
+                        tuneSeq <-  as.data.frame(initialFit)
+                      } else tuneSeq <-  as.data.frame(initialFit[1:len,])
+                      colnames(tuneSeq) <- "maxdepth"
+                    } else {
+                      tuneSeq <- data.frame(maxdepth = unique(sample(as.vector(initialFit[,1]), 
+                                                                     size = len, replace = TRUE)))
+                    }
                     tuneSeq
                   },
                   loop = function(grid) {
@@ -36,7 +42,7 @@ modelInfo <- list(label = "CART",
                       theDots$control$xval <- 0 
                       ctl <- theDots$control
                       theDots$control <- NULL    
-                    } else ctl <- rpart.control(maxdepth = param$maxdepth, xval = 0)  
+                    } else ctl <- rpart::rpart.control(maxdepth = param$maxdepth, xval = 0)  
                     
                     ## check to see if weights were passed in (and availible)
                     if(!is.null(wts)) theDots$weights <- wts    
@@ -46,10 +52,10 @@ modelInfo <- list(label = "CART",
                                         control = ctl),
                                    theDots)
                     modelArgs$data$.outcome <- y
-                    
-                    out <- do.call("rpart", modelArgs)
-                    out           
-                    },
+
+                    out <- do.call(rpart::rpart, modelArgs)
+                    out
+                  },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     ## Models are indexed by Cp so approximate the Cp for
                     ## the value of maxdepth
@@ -72,7 +78,7 @@ modelInfo <- list(label = "CART",
                       cpValues <- depth2cp(modelFit$cptable, submodels$maxdepth)
                       for(j in seq(along = cpValues))
                       {
-                        prunedFit <- prune.rpart(modelFit, cp = cpValues[j])
+                        prunedFit <- rpart::prune.rpart(modelFit, cp = cpValues[j])
                         tmp[[j+1]]  <- predict(prunedFit, newdata, type=pType)
                       }
                       out <- tmp
@@ -97,7 +103,7 @@ modelInfo <- list(label = "CART",
                       
                       for(j in seq(along = cpValues))
                       {
-                        prunedFit <- prune.rpart(modelFit, cp = cpValues[j])
+                        prunedFit <- rpart::prune.rpart(modelFit, cp = cpValues[j])
                         tmpProb <- predict(prunedFit, newdata, type = "prob")
                         tmp[[j+1]] <- as.data.frame(tmpProb[, modelFit$obsLevels, drop = FALSE])
                       }
@@ -162,5 +168,14 @@ modelInfo <- list(label = "CART",
                     rownames(out2) <- out$Variable
                     out2  
                   },
-                  tags = c("Tree-Based Model", "Implicit Feature Selection"),
+                  levels = function(x) x$obsLevels,
+                  trim = function(x) {
+                    x$call <- list(na.action = (x$call)$na.action)
+                    x$x <- NULL
+                    x$y <- NULL
+                    x$where <- NULL
+                    x
+                  },
+                  tags = c("Tree-Based Model", "Implicit Feature Selection", 
+                           "Handle Missing Predictor Data", "Accepts Case Weights"),
                   sort = function(x) x[order(x[,1]),])

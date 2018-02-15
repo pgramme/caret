@@ -4,14 +4,21 @@ modelInfo <- list(label = "Fuzzy Rules with Weight Factor",
                   parameters = data.frame(parameter = c('num.labels', 'type.mf'),
                                           class = c("numeric", "character"),
                                           label = c('#Fuzzy Terms', 'Membership Function')),
-                  grid = function(x, y, len = NULL)
-                    expand.grid(num.labels = 1+(1:len)*2,      
-                                type.mf = c("GAUSSIAN", "TRAPEZOID", "TRIANGLE")),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    type <- c("GAUSSIAN", "TRAPEZOID", "TRIANGLE")
+                    if(search == "grid") {
+                      out <- expand.grid(num.labels = 1+(1:len)*2,      
+                                         type.mf = type)
+                    } else {
+                      out <- data.frame(type.mf = sample(type, size = len, replace = TRUE),
+                                        num.labels = sample(2:20, size = len, replace = TRUE))
+                    }
+                    out
+                  },
                   loop = NULL,
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
-                    args <- list(data.train = cbind(x, as.numeric(y)),
+                    args <- list(data.train = as.matrix(cbind(x, as.numeric(y))),
                                  method.type = "FRBCS.W")
-                    args$range.data <- apply(x, 2, range)
                     
                     theDots <- list(...)
                     if(any(names(theDots) == "control")) {
@@ -24,9 +31,12 @@ modelInfo <- list(label = "Fuzzy Rules with Weight Factor",
                                                    type.implication.func = "ZADEH",
                                                    num.class = length(unique(y)),
                                                    name="sim-0")     
-                    do.call("frbs.learn", c(args, theDots))
+                    if(!(any(names(theDots) == "range.data"))) {
+                      args$range.data <- apply(args$data.train, 2, extendrange)
+                    }
+                    do.call(frbs::frbs.learn, c(args, theDots))
                     
-                    },
+                  },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     modelFit$obsLevels[predict(modelFit, newdata)[,1]]
                   },

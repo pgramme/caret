@@ -4,8 +4,14 @@ modelInfo <- list(label = "Partial Least Squares",
                   parameters = data.frame(parameter = 'ncomp',
                                           class = "numeric",
                                           label = '#Components'),
-                  grid = function(x, y, len = NULL) 
-                    data.frame(ncomp = seq(1, min(ncol(x) - 1, len), by = 1)),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- data.frame(ncomp = seq(1, min(ncol(x) - 1, len), by = 1))
+                    } else {
+                      out <- data.frame(ncomp = unique(sample(1:(ncol(x)-1), size = len, replace = TRUE)))
+                    }
+                    out
+                  },
                   loop = function(grid) {     
                     grid <- grid[order(grid$ncomp, decreasing = TRUE),, drop = FALSE]
                     loop <- grid[1,,drop = FALSE]
@@ -15,11 +21,11 @@ modelInfo <- list(label = "Partial Least Squares",
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {   
                     out <- if(is.factor(y))
                     {      
-                      plsda(x, y, method = "oscorespls", ncomp = param$ncomp, ...)
+                      plsda(x, y, method = "simpls", ncomp = param$ncomp, ...)
                     } else {
                       dat <- if(is.data.frame(x)) x else as.data.frame(x)
                       dat$.outcome <- y
-                      plsr(.outcome ~ ., data = dat, method = "simpls", ncomp = param$ncomp, ...)
+                      pls::plsr(.outcome ~ ., data = dat, method = "simpls", ncomp = param$ncomp, ...)
                     }
                     out
                   },
@@ -86,8 +92,8 @@ modelInfo <- list(label = "Partial Least Squares",
                   },
                   varImp = function(object, estimate = NULL, ...) {
                     modelCoef <- coef(object, intercept = FALSE, comps = 1:object$ncomp)
-                    perf <- MSEP(object)$val
-                    
+                    perf <- pls::MSEP(object)$val
+
                     nms <- dimnames(perf)
                     if(length(nms$estimate) > 1) {
                       pIndex <- if(is.null(estimate)) 1 else which(nms$estimate == estimate)

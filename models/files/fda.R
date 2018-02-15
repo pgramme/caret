@@ -5,28 +5,44 @@ modelInfo <- list(label = "Flexible Discriminant Analysis",
                   parameters = data.frame(parameter = c("degree", "nprune"),
                                           class = c("numeric", "numeric"),
                                           label = c('Product Degree', '#Terms')),
-                  grid = function(x, y, len = NULL) {
-                    dat <- if(!is.data.frame(x)) as.data.frame(x) else x
-                    dat$.outcome <- y
-                    
-                    mod <- fda( .outcome~., data = dat, method = earth, pmethod = "none")
-                    maxTerms <- nrow(mod$fit$dirs) - 1
-                    
-                    maxTerms <- min(200, floor(maxTerms * .75) + 2)
-                    data.frame(nprune = unique(floor(seq(2, to = maxTerms, length = len))),
-                               degree = 1)
-                  },
-                  fit = function(x, y, wts, param, lev, last, classProbs, ...) {
+                  grid = function(x, y, len = NULL, search = "grid") {
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
                     dat$.outcome <- y
-                    fda(.outcome ~ ., data = dat, method = earth, 
-                        degree = param$degree,
-                        nprune = param$nprune, ...)
+
+                    mod <- earth::earth( .outcome~., data = dat, pmethod = "none")
+                    maxTerms <- nrow(mod$dirs)
+
+                    maxTerms <- min(200, floor(maxTerms * .75) + 2)
+                    if(search == "grid") {
+                      out <- data.frame(nprune = unique(floor(seq(2, to = maxTerms, length = len))),
+                                        degree = 1)
+                    } else {
+                      out <- data.frame(nprune = sample(2:maxTerms, size = len, replace = TRUE),
+                                        degree = sample(1:2, size = len, replace = TRUE))
+                    }
+                    out[!duplicated(out),]
                   },
-                  tags = c("Multivariate Adaptive Regression Splines", "Implicit Feature Selection"),
-                  predict = function(modelFit, newdata, submodels = NULL) 
+                  fit = function(x, y, wts, param, lev, last, classProbs, ...) {
+                  	require(earth)
+                    dat <- if(is.data.frame(x)) x else as.data.frame(x)
+                    dat$.outcome <- y
+
+                    mda::fda(.outcome ~ ., data = dat, method = earth::earth,
+                        degree = param$degree,
+                        nprune = param$nprune,
+                        weights = wts,
+                        ...)
+                  },
+                  levels = function(x) x$obsLevels,
+                  tags = c("Multivariate Adaptive Regression Splines", "Implicit Feature Selection",
+                           "Accepts Case Weights"),
+                  notes = paste(
+                    "Unlike other packages used by `train`, the `earth`",
+                    "package is fully loaded when this model is used."
+                  ),                  
+                  predict = function(modelFit, newdata, submodels = NULL)
                     predict(modelFit , newdata),
-                  prob = function(modelFit, newdata, submodels = NULL) 
+                  prob = function(modelFit, newdata, submodels = NULL)
                     predict(modelFit, newdata, type= "posterior"),
                   predictors = function(x, ...) {
                     code <- getModelInfo("earth", regex = FALSE)[[1]]$predictors
@@ -34,6 +50,6 @@ modelInfo <- list(label = "Flexible Discriminant Analysis",
                     out <- if(class(x$fit) == "earth") code(x$fit) else tmp
                     out
                   },
-                  varImp = function(object, value = "gcv", ...) 
+                  varImp = function(object, value = "gcv", ...)
                     varImp(object$fit, value = value, ...),
                   sort = function(x) x[order(x$degree, x$nprune),])

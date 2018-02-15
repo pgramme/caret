@@ -5,38 +5,42 @@ modelInfo <- list(label = "Generalized Additive Model using Splines",
                   parameters = data.frame(parameter = c('select', 'method'),
                                           class = c('logical', 'character'),
                                           label = c('Feature Selection', 'Method')),
-                  grid = function(x, y, len = NULL) 
-                    expand.grid(select = c(TRUE, FALSE), method = "GCV.Cp"),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- expand.grid(select = c(TRUE, FALSE), method = "GCV.Cp")
+                    } else {
+                      out <- data.frame(select = sample(c(TRUE, FALSE), size = len, replace = TRUE),
+                                        method = sample(c("GCV.Cp", "ML"), size = len, replace = TRUE))
+                    }
+                    out[!duplicated(out),]
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
+                    require(mgcv)
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
                     modForm <- caret:::smootherFormula(x)
                     if(is.factor(y)) {
-                      dat$.outcome <- ifelse(y == lev[1], 1, 0)
+                      dat$.outcome <- ifelse(y == lev[1], 0, 1)
                       dist <- binomial()
                     } else {
                       dat$.outcome <- y
                       dist <- gaussian()
                     }
-                    out <- mgcv:::gam(modForm, data = dat, family = dist, 
+                    modelArgs <- list(formula = modForm,
+                                      data = dat,
                                       select = param$select, 
-                                      method = as.character(param$method), 
-                                      ...)
-#                     if(is.null(wts)) {
-# 
-#                     } else {
-#                       out <- mgcv:::gam(modForm, data = dat, family = dist, 
-#                                         select = param$select, 
-#                                         method = as.character(param$method), 
-#                                         weights = wts,
-#                                         ...)
-#                     }
+                                      method = as.character(param$method))
+                    ## Intercept family if passed in
+                    theDots <- list(...)
+                    if(!any(names(theDots) == "family")) modelArgs$family <- dist
+                    modelArgs <- c(modelArgs, theDots)
+
+                    out <- do.call(mgcv::gam, modelArgs)
                     out
                     
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
-                    if(modelFit$problemType == "Classification")
-                    {
+                    if(modelFit$problemType == "Classification") {
                       probs <-  predict(modelFit, newdata, type = "response")
                       out <- ifelse(probs < .5,
                                     modelFit$obsLevel[1],
@@ -58,6 +62,7 @@ modelInfo <- list(label = "Generalized Additive Model using Splines",
                   predictors = function(x, ...) {
                     predictors(x$terms)
                   },
+                  levels = function(x) x$obsLevels,
                   varImp = function(object, ...) {
                     smoothed <- summary(object)$s.table[, "p-value", drop = FALSE]
                     linear <- summary(object)$p.table
@@ -78,5 +83,16 @@ modelInfo <- list(label = "Generalized Additive Model using Splines",
                     }
                     gams
                   },
+                  notes = 
+                    paste(
+                      'Which terms enter the model in a nonlinear manner is determined',
+                      'by the number of unique values for the predictor. For example,',
+                      'if a predictor only has four unique values, most basis expansion',
+                      'method will fail because there are not enough granularity in the',
+                      'data. By default, a predictor must have at least 10 unique',
+                      'values to be used in a nonlinear basis expansion.',
+                      'Unlike other packages used by `train`, the `mgcv`',
+                      'package is fully loaded when this model is used.'
+                    ),
                   tags = c("Generalized Linear Model", "Generalized Additive Model"),
                   sort = function(x) x)

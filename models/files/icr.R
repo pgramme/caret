@@ -5,9 +5,16 @@ modelInfo <- list(label = "Independent Component Regression",
                   parameters = data.frame(parameter = c('n.comp'),
                                           class = c('numeric'),
                                           label = c('#Components')),
-                  grid = function(x, y, len = NULL) data.frame(n.comp = 1:len),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- data.frame(n.comp = 1:len)
+                    } else {
+                      out <- data.frame(n.comp = unique(sample(1:ncol(x), size = len, replace = TRUE)))
+                    }
+                    out
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
-                    icr(x, y, n.comp = param$n.comp, ...)
+                    caret::icr(x, y, n.comp = param$n.comp, ...)
                   },
                   predict = function(modelFit, newdata, submodels = NULL) predict(modelFit, newdata),
                   prob = NULL,

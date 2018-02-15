@@ -1,49 +1,39 @@
 modelInfo <- list(label = "Parallel Random Forest",
-                  library = "randomForest",
+                  library = c("e1071", "randomForest", "foreach", "import"),
                   loop = NULL,
                   type = c("Classification", "Regression"),
                   parameters = data.frame(parameter = "mtry",
                                           class = "numeric",
                                           label = "#Randomly Selected Predictors"),
-                  grid = function(x, y, len = NULL) {
-                    p <- ncol(x)
-                    if(len == 1) {  
-                      tuneSeq <- if(!is.factor(y)) max(floor(p/3), 1) else floor(sqrt(p))
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- data.frame(mtry = caret::var_seq(p = ncol(x), 
+                                                              classification = is.factor(y), 
+                                                              len = len))
                     } else {
-                      if(p <= len)
-                      { 
-                        tuneSeq <- floor(seq(2, to = p, length = p))
-                      } else {
-                        if(p < 500 ) tuneSeq <- floor(seq(2, to = p, length = len))
-                        else tuneSeq <- floor(2^seq(1, to = log(p, base = 2), length = len))
-                      }
+                      out <- data.frame(mtry = unique(sample(1:ncol(x), size = len, replace = TRUE)))
                     }
-                    if(any(table(tuneSeq) > 1))
-                    {
-                      tuneSeq <- unique(tuneSeq)
-                      cat(
-                        "note: only",
-                        length(tuneSeq),
-                        "unique complexity parameters in default grid.",
-                        "Truncating the grid to",
-                        length(tuneSeq), ".\n\n")      
-                    }
-                    data.frame(mtry = tuneSeq)
+                    out
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
-                    workers <- getDoParWorkers()
+                    workers <- foreach::getDoParWorkers()
+		                import::from(foreach, `%dopar%`)
                     theDots <- list(...)
-                    theDots$ntree <- if(is.null(theDots$ntree)) 250 else theDots$ntree
+                    theDots$ntree <- if(is.null(theDots$ntree)) 
+                      formals(randomForest:::randomForest.default)$ntree else 
+                        theDots$ntree
                     
                     theDots$x <- x
                     theDots$y <- y
                     theDots$mtry <- param$mtry
                     theDots$ntree <- ceiling(theDots$ntree/workers)                       
-                    
-                    out <- foreach(ntree = 1:workers, .combine = combine) %dopar% {
-                      library(randomForest)
-                      do.call("randomForest", theDots)
+                    iter_seeds <- sample.int(10000, size = workers)
+                    out <- foreach::foreach(ntree = 1:workers, .combine = randomForest::combine) %dopar% {
+                      set.seed(iter_seeds[workers])
+                      do.call(randomForest::randomForest, theDots)
                     }
+                    if(!inherits(out, "randomForest")) 
+                      out <- do.call("randomForest::combine", out)
                     out$call["x"] <- "x"
                     out$call["y"] <- "y"
                     out
@@ -83,4 +73,12 @@ modelInfo <- list(label = "Parallel Random Forest",
                   },
                   levels = function(x) x$classes,
                   tags = c("Random Forest", "Ensemble Model", "Bagging", "Implicit Feature Selection"),
-                  sort = function(x) x[order(x[,1]),])
+                  sort = function(x) x[order(x[,1]),],
+                  oob = function(x) {
+                    out <- switch(x$type,
+                                  regression =   c(sqrt(max(x$mse[length(x$mse)], 0)), x$rsq[length(x$rsq)]),
+                                  classification =  c(1 - x$err.rate[x$ntree, "OOB"],
+                                                      e1071::classAgreement(x$confusion[,-dim(x$confusion)[2]])[["kappa"]]))
+                    names(out) <- if(x$type == "regression") c("RMSE", "Rsquared") else c("Accuracy", "Kappa")
+                    out
+                  })

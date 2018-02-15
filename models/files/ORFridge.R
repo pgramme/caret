@@ -5,38 +5,30 @@ modelInfo <- list(label = "Oblique Random Forest",
                   parameters = data.frame(parameter = "mtry",
                                           class = "numeric",
                                           label = "#Randomly Selected Predictors"),
-                  grid = function(x, y, len = NULL) {
-                    p <- ncol(x)
-                    if(len == 1) {  
-                      tuneSeq <- if(!is.factor(y)) max(floor(p/3), 1) else floor(sqrt(p))
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- data.frame(mtry = caret::var_seq(p = ncol(x), 
+                                                              classification = is.factor(y), 
+                                                              len = len))
                     } else {
-                      if(p <= len)
-                      { 
-                        tuneSeq <- floor(seq(2, to = p, length = p))
-                      } else {
-                        if(p < 500 ) tuneSeq <- floor(seq(2, to = p, length = len))
-                        else tuneSeq <- floor(2^seq(1, to = log(p, base = 2), length = len))
-                      }
+                      out <- data.frame(mtry = unique(sample(1:ncol(x), size = len, replace = TRUE)))
                     }
-                    if(any(table(tuneSeq) > 1))
-                    {
-                      tuneSeq <- unique(tuneSeq)
-                      cat(
-                        "note: only",
-                        length(tuneSeq),
-                        "unique complexity parameters in default grid.",
-                        "Truncating the grid to",
-                        length(tuneSeq), ".\n\n")      
-                    }
-                    data.frame(mtry = tuneSeq)
+                    out
                   },
-                  fit = function(x, y, wts, param, lev, last, classProbs, ...) 
-                    obliqueRF(as.matrix(x), y, training_method = "ridge", ...),
+                  fit = function(x, y, wts, param, lev, last, classProbs, ...) {
+                    require(obliqueRF)
+                    obliqueRF::obliqueRF(as.matrix(x), y, training_method = "ridge", ...)
+                  },
                   predict = function(modelFit, newdata, submodels = NULL)
                     predict(modelFit, newdata),
                   prob = function(modelFit, newdata, submodels = NULL)
                     predict(modelFit, newdata, type = "prob"),
+                  levels = function(x) x$obsLevels,
+                  notes = paste(
+                    "Unlike other packages used by `train`, the `obliqueRF`",
+                    "package is fully loaded when this model is used."
+                  ),
                   tags = c("Random Forest", "Oblique Tree", "Ridge Regression", 
-                           "Implicit Feature Selection", "Ensemble Model",
+                           "Implicit Feature Selection", "Ensemble Model", "Two Class Only",
                            "L2 Regularization"),
                   sort = function(x) x[order(x[,1]),])

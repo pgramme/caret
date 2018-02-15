@@ -1,7 +1,12 @@
+timestamp <- Sys.time()
 library(caret)
-timestamp <- format(Sys.time(), "%Y_%m_%d_%H_%M")
+library(plyr)
+library(recipes)
+library(dplyr)
 
 model <- "SLAVE"
+
+
 
 #########################################################################
 
@@ -11,9 +16,17 @@ testing <- twoClassSim(30, linearVars = 2)[, 5:8]
 trainX <- training[, -ncol(training)]
 trainY <- training$Class
 
-cctrl1 <- trainControl(method = "cv", number = 3, returnResamp = "all")
-cctrl2 <- trainControl(method = "LOOCV")
-cctrl3 <- trainControl(method = "none")
+rec_cls <- recipe(Class ~ ., data = training) %>%
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors())
+
+seeds <- vector(mode = "list", length = nrow(training) + 1)
+seeds <- lapply(seeds, function(x) 1:3)
+
+cctrl1 <- trainControl(method = "cv", number = 3, returnResamp = "all", seed = seeds)
+cctrl2 <- trainControl(method = "LOOCV", seed = seeds)
+cctrl3 <- trainControl(method = "none", seed = seeds)
+cctrlR <- trainControl(method = "cv", number = 3, returnResamp = "all", search = "random")
 
 set.seed(849)
 test_class_cv_model <- train(trainX, trainY, 
@@ -33,11 +46,16 @@ test_class_pred <- predict(test_class_cv_model, testing[, -ncol(testing)])
 test_class_pred_form <- predict(test_class_cv_form, testing[, -ncol(testing)])
 
 set.seed(849)
+test_class_rand <- train(trainX, trainY, 
+                         method = "SLAVE", 
+                         trControl = cctrlR,
+                         tuneLength = 4)
+
+set.seed(849)
 test_class_loo_model <- train(trainX, trainY, 
                               method = "SLAVE", 
                               trControl = cctrl2,
-                              tuneLength = 2,
-                              preProc = c("center", "scale"))
+                              tuneLength = 2)
 
 set.seed(849)
 test_class_none_model <- train(trainX, trainY, 
@@ -48,6 +66,26 @@ test_class_none_model <- train(trainX, trainY,
 
 test_class_none_pred <- predict(test_class_none_model, testing[, -ncol(testing)])
 
+set.seed(849)
+test_class_rec <- train(x = rec_cls,
+                        data = training,
+                        method = "SLAVE", 
+                        tuneLength = 2,
+                        trControl = cctrl1)
+
+
+if(
+  !isTRUE(
+    all.equal(test_class_cv_model$results, 
+              test_class_rec$results))
+)
+  stop("CV weights not giving the same results")
+
+test_class_imp_rec <- varImp(test_class_rec)
+
+
+test_class_pred_rec <- predict(test_class_rec, testing[, -ncol(testing)])
+
 test_levels <- levels(test_class_cv_model)
 if(!all(levels(trainY) %in% test_levels))
   cat("wrong levels")
@@ -55,11 +93,13 @@ if(!all(levels(trainY) %in% test_levels))
 #########################################################################
 
 sInfo <- sessionInfo()
+timestamp_end <- Sys.time()
 
 tests <- grep("test_", ls(), fixed = TRUE, value = TRUE)
 
-save(list = c(tests, "sInfo", "timestamp"),
+save(list = c(tests, "sInfo", "timestamp", "timestamp_end"),
      file = file.path(getwd(), paste(model, ".RData", sep = "")))
 
-q("no")
+if(!interactive())
+   q("no")
 

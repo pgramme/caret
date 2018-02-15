@@ -87,9 +87,25 @@ etc.
 <!--begin.rcode tags, results='asis', echo=FALSE, message=FALSE
 mods <- getModelInfo()
 
+## redundant tag names (e.g. "L1 Regularization Models" and "L1 Regularization")
+## these will get changed in the files but make a short fix for now
+
+fix_tags <- function(x) {
+  x[x == "L1 Regularization Models"] <- "L1 Regularization"
+  x[x == "L2 Regularization Models"] <- "L2 Regularization"
+  x[x == "Generalized Linear Models"] <- "Generalized Linear Model"
+  x[x == "Discriminant Analysis Models"] <- "Discriminant Analysis"
+  x[x == "Feature Extraction Models"] <- "Feature Extraction"  
+  x[x == "Linear Classifier Models"] <- "Linear Classifier"    
+  x[x == "Linear Regression Models"] <- "Linear Regression"     
+  x
+  }
+
+
 for(j in seq(along = mods)) mods[[j]]$method_value <- names(mods)[j]
 
 tags  <- lapply(mods, function(x) x$tag)
+tags <- lapply(tags, fix_tags)
 utags <- sort(unique(unlist(tags)))
 utags <- utags[utags != ""]
 fname <- paste(gsub("([[:punct:]])|([[:space:]])", "_", utags),
@@ -156,32 +172,39 @@ print(gvisTable(modelTable, options = list(width = "800px")),
   </div>
   <!-- end #content -->
 <div id="sidebar">
-  <ul>
-    <li>
-      <h2>Links</h2>
-      <p><a href="modelList.html"><tt>train</tt> Model List</a></p>
-    </li>
-    <li>
-      <h2>Topics</h2>
-      <ul>
-      	<li><a href="datasets.html">Data Sets</a></li>
-        <li><a href="visualizations.html">Visualizations</a></li>
-        <li><a href="preprocess.html">Pre-Processing</a></li>
-        <li><a href="splitting.html">Data Splitting</a></li>
-        <li><a href="misc.html">Miscellaneous Model Functions</a></li>
-        <li><a href="training.html">Model Training and Tuning</a></li>
-        <li><a href="modelList.html"><tt>train</tt> Model List</a></li>
-        <li><a href="bytag.html"><tt>train</tt> Models By Tag</a></li> 
-        <li><a href="similarity.html"><tt>train</tt> Models By Similarity</a></li>   
-        <li><a href="custom_models.html">Using Custom Models</a></li>            
-        <li><a href="varimp.html">Variable Importance</a></li>
-        <li><a href="featureselection.html">Feature Selection</a></li>
-        <li><a href="other.html">Other Functions</a></li>
-        <li><a href="parallel.html">Parallel Processing</a></li>
-        <li><a href="adaptive.html">Adaptive Resampling</a></li> 
-      </ul>
-    </li>
-  </ul>
+<ul>
+  <li>
+    <h2>General Topics</h2>
+    <ul>
+      <li><a href="index.html">Front Page</a></li>
+      <li><a href="visualizations.html">Visualizations</a></li>
+      <li><a href="preprocess.html">Pre-Processing</a><li>
+      <li><a href="splitting.html">Data Splitting</a></li>
+      <li><a href="varimp.html">Variable Importance</a></li>
+      <li><a href="other.html">Model Performance</a></li>
+      <li><a href="parallel.html">Parallel Processing</a></li>
+    </ul>
+    <h2>Model Training and Tuning</h2>
+    <ul>
+      <li><a href="training.html">Basic Syntax</a></li>
+      <li><a href="modelList.html">Sortable Model List</a></li>
+      <li><a href="bytag.html">Models By Tag</a></li>
+      <li><a href="similarity.html">Models By Similarity</a></li>
+      <li><a href="custom_models.html">Using Custom Models</a></li>
+      <li><a href="sampling.html">Sampling for Class Imbalances</a></li> 
+      <li><a href="random.html">Random Search</a></li> 
+      <li><a href="adaptive.html">Adaptive Resampling</a></li> 
+    </ul>
+    <h2>Feature Selection</h2>
+    <ul>
+      <li><a href="featureselection.html">Overview</a>
+      <li><a href="rfe.html">RFE</a></li>
+      <li><a href="filters.html">Filters</a></li>
+      <li><a href="GA.html">GA</a></li>
+      <li><a href="SA.html">SA</a></li>
+    </ul>  
+  </li>
+</ul>
 </div>
 <!-- end #sidebar -->
 <div style="clear: both;">&nbsp;</div>

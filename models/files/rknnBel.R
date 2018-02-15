@@ -6,9 +6,15 @@ modelInfo <- list(label = "Random k-Nearest Neighbors with Feature Selection",
                                           label = c("#Neighbors", 
                                                     "#Randomly Selected Predictors",
                                                     "#Features Dropped")),
-                  grid = function(x, y, len = NULL) {
-                    grid <- expand.grid(k = (5:((2 * len)+4))[(5:((2 * len)+4))%%2 > 0], 
-                                        d = seq(.2, .8, length = len))
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      grid <- expand.grid(k = (5:((2 * len)+4))[(5:((2 * len)+4))%%2 > 0], 
+                                          d = seq(.2, .8, length = len))
+                    } else {
+                      by_val <- if(is.factor(y)) length(levels(y)) else 1
+                      grid <- data.frame(d = runif(len, min = 0, max = 1),
+                                         k = sample(seq(1, floor(nrow(x)/3), by = by_val), size = len, replace = TRUE))
+                    }
                     grid$d <- floor(grid$d*ncol(x))
                     grid$d[grid$d == 0] <- 1
                     newp <- ncol(x) - grid$d
@@ -38,7 +44,7 @@ modelInfo <- list(label = "Random k-Nearest Neighbors with Feature Selection",
                     }
                     theDots = list(...)
                     if(length(theDots) > 0) out <- c(out, theDots)
-                    mod <- do.call("rknnBel", out)
+                    mod <- do.call(rknn::rknnBel, out)
                     out$vars <- bestset(mod, criterion = "mean_accuracy")
                     out$model <- mod
                     out
@@ -54,13 +60,14 @@ modelInfo <- list(label = "Random k-Nearest Neighbors with Feature Selection",
                     modelFit$model <- NULL
                     modelFit$d <- NULL
                     if(!is.factor(modelFit$y)) {
-                      out <- do.call("rknnReg", modelFit)$pred
+                      out <- do.call(rknn::rknnReg, modelFit)$pred
                     } else {
-                      out <- as.character(do.call("rknn", modelFit)$pred)
-                    } 
+                      out <- as.character(do.call(rknn::rknn, modelFit)$pred)
+                    }
                     out
                   },
                   prob = NULL,
+                  levels = function(x) x$obsLevels,
                   predictors = function(x, s = NULL, ...) {
                     bestset(x$mod, criterion = "mean_accuracy")
                   },
@@ -77,6 +84,6 @@ modelInfo <- list(label = "Random k-Nearest Neighbors with Feature Selection",
                     }
                     imp
                   },
-                  tags = c("Prototype Models", "Feature Selection Wrapper"),
+                  tags = c("Prototype Models", "Feature Selection Wrapper", "Two Class Only"),
                   prob = NULL,
                   sort = function(x) x[order(x[,1]),])

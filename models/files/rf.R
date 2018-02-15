@@ -5,37 +5,22 @@ modelInfo <- list(label = "Random Forest",
                   parameters = data.frame(parameter = "mtry",
                                           class = "numeric",
                                           label = "#Randomly Selected Predictors"),
-                  grid = function(x, y, len = NULL) {
-                    p <- ncol(x)
-                    if(len == 1) {  
-                      tuneSeq <- if(!is.factor(y)) max(floor(p/3), 1) else floor(sqrt(p))
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- data.frame(mtry = caret::var_seq(p = ncol(x), 
+                                                              classification = is.factor(y), 
+                                                              len = len))
                     } else {
-                      if(p <= len)
-                      { 
-                        tuneSeq <- floor(seq(2, to = p, length = p))
-                      } else {
-                        if(p < 500 ) tuneSeq <- floor(seq(2, to = p, length = len))
-                        else tuneSeq <- floor(2^seq(1, to = log(p, base = 2), length = len))
-                      }
+                      out <- data.frame(mtry = unique(sample(1:ncol(x), size = len, replace = TRUE)))
                     }
-                    if(any(table(tuneSeq) > 1))
-                    {
-                      tuneSeq <- unique(tuneSeq)
-                      cat(
-                        "note: only",
-                        length(tuneSeq),
-                        "unique complexity parameters in default grid.",
-                        "Truncating the grid to",
-                        length(tuneSeq), ".\n\n")      
-                    }
-                    data.frame(mtry = tuneSeq)
+                    out
                   },
-                  fit = function(x, y, wts, param, lev, last, classProbs, ...) 
-                    randomForest(x, y, mtry = param$mtry, ...),
-                  predict = function(modelFit, newdata, submodels = NULL) 
-                    predict(modelFit, newdata),
+                  fit = function(x, y, wts, param, lev, last, classProbs, ...)
+                    randomForest::randomForest(x, y, mtry = param$mtry, ...),
+                  predict = function(modelFit, newdata, submodels = NULL)
+                    if(!is.null(newdata)) predict(modelFit, newdata) else predict(modelFit),
                   prob = function(modelFit, newdata, submodels = NULL)
-                    predict(modelFit, newdata, type = "prob"),
+                    if(!is.null(newdata)) predict(modelFit, newdata, type = "prob") else predict(modelFit, type = "prob"),
                   predictors = function(x, ...) {
                     ## After doing some testing, it looks like randomForest
                     ## will only try to split on plain main effects (instead
@@ -67,4 +52,12 @@ modelInfo <- list(label = "Random Forest",
                   },
                   levels = function(x) x$classes,
                   tags = c("Random Forest", "Ensemble Model", "Bagging", "Implicit Feature Selection"),
-                  sort = function(x) x[order(x[,1]),])
+                  sort = function(x) x[order(x[,1]),],
+                  oob = function(x) {
+                    out <- switch(x$type,
+                                  regression =   c(sqrt(max(x$mse[length(x$mse)], 0)), x$rsq[length(x$rsq)]),
+                                  classification =  c(1 - x$err.rate[x$ntree, "OOB"],
+                                                      e1071::classAgreement(x$confusion[,-dim(x$confusion)[2]])[["kappa"]]))
+                    names(out) <- if(x$type == "regression") c("RMSE", "Rsquared") else c("Accuracy", "Kappa")
+                    out
+                  })

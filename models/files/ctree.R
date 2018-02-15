@@ -5,8 +5,13 @@ modelInfo <- list(label = "Conditional Inference Tree",
                   parameters = data.frame(parameter = 'mincriterion',
                                           class = 'numeric',
                                           label = '1 - P-Value Threshold'),
-                  grid = function(x, y, len = NULL) {
-                    data.frame(mincriterion = seq(from = .99, to = 0.01, length = len))
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- data.frame(mincriterion = seq(from = .99, to = 0.01, length = len))
+                    } else {
+                      out <- data.frame(mincriterion = runif(len, min = 0, max = 1))
+                    }
+                    out
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
@@ -27,7 +32,7 @@ modelInfo <- list(label = "Conditional Inference Tree",
                                         data = dat,
                                         controls = ctl),
                                    theDots)
-                    out <- do.call(getFromNamespace("ctree", "party"), modelArgs)
+                    out <- do.call(party::ctree, modelArgs)
                     out
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
@@ -60,6 +65,6 @@ modelInfo <- list(label = "Conditional Inference Tree",
                     }
                     unique(vars)
                   },
-                  tags = c('Tree-Based Model', "Implicit Feature Selection"),
+                  tags = c('Tree-Based Model', "Implicit Feature Selection", "Accepts Case Weights"),
                   levels = function(x) levels(x@data@get("response")[,1]),
                   sort = function(x) x[order(-x$mincriterion),])

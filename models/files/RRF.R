@@ -6,39 +6,26 @@ modelInfo <- list(label = "Regularized Random Forest",
                                           class = c('numeric', 'numeric', 'numeric'),
                                           label = c('#Randomly Selected Predictors', 'Regularization Value', 
                                                     'Importance Coefficient')),
-                  grid = function(x, y, len = NULL) {
-                    p <- ncol(x)
-                    if(len == 1) {  
-                      tuneSeq <- if(!is.factor(y)) max(floor(p/3), 1) else floor(sqrt(p))
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- expand.grid(mtry = caret::var_seq(p = ncol(x), 
+                                                               classification = is.factor(y), 
+                                                               len = len),
+                                         coefReg = seq(0.01, 1, length = len),
+                                         coefImp = seq(0, 1, length = len))
                     } else {
-                      if(p <= len)
-                      { 
-                        tuneSeq <- floor(seq(2, to = p, length = p))
-                      } else {
-                        if(p < 500 ) tuneSeq <- floor(seq(2, to = p, length = len))
-                        else tuneSeq <- floor(2^seq(1, to = log(p, base = 2), length = len))
-                      }
+                      out <- data.frame(mtry = sample(1:ncol(x), size = len, replace = TRUE),
+                                        coefReg = runif(len, min = 0, max = 1),
+                                        coefImp = runif(len, min = 0, max = 1))
                     }
-                    if(any(table(tuneSeq) > 1))
-                    {
-                      tuneSeq <- unique(tuneSeq)
-                      cat(
-                        "note: only",
-                        length(tuneSeq),
-                        "unique complexity parameters in default grid.",
-                        "Truncating the grid to",
-                        length(tuneSeq), ".\n\n")      
-                    }
-                    expand.grid(mtry = tuneSeq,
-                                coefReg = seq(0.01, 1, length = len),
-                                coefImp = seq(0, 1, length = len))
+                    out
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     theDots <- list(...)
                     theDots$importance <- TRUE
                     args <- list(x = x, y = y, mtry = param$mtry)
                     args <- c(args, theDots)                       
-                    firstFit <- do.call("randomForest", args)
+                    firstFit <- do.call(randomForest::randomForest, args)
                     firstImp <- randomForest:::importance(firstFit)
                     if(is.factor(y))
                     {
@@ -46,7 +33,7 @@ modelInfo <- list(label = "Regularized Random Forest",
                     } else firstImp <- firstImp[,"%IncMSE"]/max(firstImp[,"%IncMSE"])
                     firstImp <- ((1 - param$coefImp) * param$coefReg) + (param$coefImp * firstImp)
                     
-                    RRF(x, y, mtry = param$mtry, coefReg = firstImp, ...)
+                    RRF::RRF(x, y, mtry = param$mtry, coefReg = firstImp, ...)
                   },
                   predict = function(modelFit, newdata, submodels = NULL) 
                     predict(modelFit, newdata),
@@ -71,5 +58,8 @@ modelInfo <- list(label = "Regularized Random Forest",
                     }
                     out
                   },
-                  tags = c("Random Forest", "Ensemble Model", "Bagging", "Implicit Feature Selection", "Regularization"),
+                  levels = function(x) x$obsLevels,
+                  tags = c("Random Forest", "Ensemble Model", 
+                           "Bagging", "Implicit Feature Selection", 
+                           "Regularization"),
                   sort = function(x) x[order(x$coefReg),])

@@ -1,8 +1,321 @@
 \name{NEWS}
 \title{News for Package \pkg{caret}}
-\newcommand{\cpkg}{\href{http://CRAN.R-project.org/package=#1}{\pkg{#1}}}
+\newcommand{\cpkg}{\href{https://CRAN.R-project.org/package=#1}{\pkg{#1}}}
+\newcommand{\issue}{\href{https://github.com/topepo/caret/issues/#1}{(issue #1)}}
 
-\section{Changes in version 6.0-XX}{
+
+\section{Changes in version 6.0-78}{
+  \itemize{ 
+    \item A number of changes were made to the underlying model code to repair problems caused by the previous version. In essence, unless the modeling package was formally loaded, the model code would fail in some cases.  In the vast majority of cases, \code{train} will not load the package (but will load the namespace). There are some exceptions where this is not possible, including \code{bam}, \code{earth}, \code{gam}, \code{gamLoess}, \code{gamSpline}, \code{logicBag}, \code{ORFlog}, \code{ORFpls}, \code{ORFridge}, \code{ORFsvm}, \code{plsRglm}, \code{RSimca}, \code{rrlda}, \code{spikeslab}, and others. These are noted in \code{?models} and in the model code itself. The regression tests now catch these issues. 
+    \item The option to control the minimum node size to models \code{ranger} and \code{Rborist} was added by \code{hadjipantelis} \issue{732}. 
+    \item The rule-based model \code{GFS.GCCL} was removed from the model library. 
+    \item A bug was fixed affecting models using the \pkg{sparsediscrim} package (i.e. \code{dda} and \code{rlda})where the class probability values were reversed. \issue{761}.
+    \item The \code{keras} models now clear the session prior to each model fit to avoid problems. Also, on the last fit, the model is serialized so that it can be used between sessions. The \code{predict} code will automatically undo this encoding so that the user does not have to manually intervene. 
+    \item A bug in \code{twoClassSummary} was fixed that prevents failure when the class level includes "y" \issue{770}.
+    \item The \code{preProcess} function can now scale variables to a range where the user can set the high and low values \issue{730}. Thanks to Sergey Korop. 
+    \item Erwan Le Pennec fixed some issues when \code{train} was run using some parallel processing backends (e.g. \code{doFuture} and \code{doAzureParallel}) \issue{748}.
+    \item Waleed Muhanna found and fixed a bug in \code{twoClassSim} when irrelevant variables were generated. \issue{744}.
+    \item \code{hadjipantelis} added the DART model (aka "Dropouts meet Multiple Additive Regression Trees") with the model code \code{xgbDART } \issue{742}.
+    \item Vadim Khotilovich updated \code{predict.dummyVars} to run faster with large datasets with many factors \issue{727}.
+    \item \code{spatialSign} now has the option of removing missing data prior to computing the norm \issue{789}.
+    \item The various \cpkg{earth} models have been updated to work with recent versions of that package, including multi-class \code{glm} models \issue{779}.
+    }
+}
+
+\section{Changes in version 6.0-77}{
+  \itemize{ 
+    \item Two neural network models (containing up to three hidden layers) using \code{mxnet} were added; \code{mxnet} (optimiser: SGD) and \code{mxnetAdam} (optimiser: ADAM).
+    \item A new method was added for \code{train} so that \cpkg{recipes} can be used to specify the model terms and preprocessing. Alexis Sardá provided a great deal of help converting the bootstrap optimism code to the new workflows. A new chapter was added to the package website related to recipes. 
+    \item The Yeo-Johnson transformation parameter estimation code was rewritten and not longer requires the \code{car} package. 
+    \item The leave-one-out cross-validation workflow for \code{train} has been harmonized with the other resampling methods in terms of fault tolerance and prediction trimming. 
+    \item \code{train} now uses different random numbers to make resamples. Previously, setting the seed prior to calling \code{train} should result in getting the same resamples. However, if \code{train} loaded or imported a namespace from another package, and that startup process used random numbers, it could lead to different random numbers being used. See \issue{452} for details. Now, \code{train} gets a separate (and more reproducible) seed that will be used to generate the resamples. However, this may effect random number reproducibility between this version and previous versions. Otherwise, this change should increase the reproducibility of results. 
+    \item Erwan Le Pennec conducted the herculean task of modifying all of the model code to call by namespace (instead of fully loading each required package). This should reduce naming conflicts \issue{701}.  
+    \item MAE was added as output metric for regression tasks through \code{postResample} and \code{defaultSummary} by hadjipantelis. The function is now exposed to the users. \issue{657}.
+    \item More average precision/recall statistics were added to \code{multiClassSummary} \issue{697}. 
+    \item The package website code was updated to use version 4 of the D3 JS library and now uses \cpkg{heatmaply} to make the interactive heatmap. 
+    \item Added a \code{ggplot} method for lift objects (and fixed a bug in the \code{lattice} version of the code) for \issue{656}.
+    \item Vadim Khotilovich made a change to speed up \code{predict.dummyVars} \issue{727}. 
+    \item The model code for \code{ordinalNet} was updated for recent changes to that package. 
+    \item \code{oblique.tree}  was removed from the model library. 
+    \item The default grid generation for rotation forest models now provides better values of \code{K}.
+    \item The parameter ranges for \code{AdaBag} and \code{AdaBoost.M1} were changed; the number of iterations in the default grids have been lowered. 
+    \item Switched to non-formula interface in ranger. Also, another tuning parameter was added to ranger (\code{splitrule}) that can be used to change the splitting procedure and includes extremely randomized trees. This requires version 0.8.0 of the \cpkg{ranger} package. \issue{581}
+    \item A simple "null model" was added. For classification, it predictors using the most prevalent level and, for regression, fits an intercept only model. \issue{694}
+    \item A function \code{thresholder} was added to analyze the resample results for two class problems to choose an appropriate probability cutoff a la \url{https://topepo.github.io/caret/using-your-own-model-in-train.html#Illustration5} \issue{224}. 
+    \item Two neural network models (containing a single hidden layers) using \code{tensorflow}/\code{keras} were added.  \code{mlpKerasDecay} uses standard weight decay while \code{mlpKerasDropout} uses dropout for regularization. Both use RMSProp optimizer and have a lot of tuning parameters. Two additional models, \code{mlpKerasDecayCost} and \code{mlpKerasDropoutCost}, are classification only and perform cost-sensitive learning. Note that these models will not run in parallel using \cpkg{caret}'s parallelism and also will not give reproducible results from run-to-run (see \url{https://github.com/rstudio/keras/issues/42}). 
+    \item The range for one parameter (\code{gamma}) was modified in the \code{mlpSGD} model code.
+    \item A bug in classification models with all missing predictions was fixed (found by andzandz11). \issue{684}
+    \item A bug preventing preprocessing to work properly when the preprocessing transformations are related to individual columns only fixed by Mateusz Kobos in \issue{679}.
+    \item A prediction bug in \code{glm.nb} that was found by jpclemens0 was fixed \issue{688}.
+    \item A bug was fixed in Self-Organizing Maps via \code{xyf} for regression models. 
+    \item A bug was fixed in \code{rpartCost} related to how the tuning parameter grid was processed. 
+    \item A bug in negative-binomial GLM models (found by jpclemens0)  was fixed \issue{688}.
+    \item In \code{trainControl}, if \code{repeats} is used on methods other than \code{"repeatedcv"} or \code{"adaptive_cv"}, a warning is issued. Also, for method other than these two, a new default (\code{NA}) is given to \code{repeats}. \issue{720}. 
+    \item \code{rfFuncs} now computes importance on the first and last model fit. \issue{723}
+  }
+} 
+
+
+\section{Changes in version 6.0-76}{
+	\itemize{
+		\item Monotone multi-layer perceptron neural network models from the \cpkg{monmlp} package were added \issue{489}.
+		\item A new resampling function (\code{groupKFold}) was added \issue{540}.
+		\item The bootstrap optimism estimate was added by Alexis Sarda \issue{544}.
+		\item Bugs in \code{glm}, \code{glm.nb}, and \code{lm} variable importance methods that occur when a single variable is in the model \issue{543}.
+		\item A bug in \code{filterVarImp} was fixed where the ROC curve AUC could be much less than 0.50 because the directionality of the predictor was not taken into account. This will artificially increase the importance of some non-informative predictors. However, the bug might report the AUC for an important predictor to be 0.20 instead of 0.80 \issue{565}.
+		\item \code{multiClassSummary} now reports the average F score \issue{566}.
+		\item The \code{RMSE} and \code{R2} are now (re)exposed to the users \issue{563}.
+		\item A \cpkg{caret} bug was discovered by Jiebiao Wang where \code{glmboost}, \code{gamboost}, and \code{blackboost} models incorrectly reported the class probabilities \issue{560}.
+		\item Training data weights support was added to \code{xgbTree} model by schistyakov.
+		\item Regularized logistic regression through Liblinear (\code{LiblineaR::LiblineaR}) using L1 or  L2 regularization were added by hadjipantelis.
+		\item A bug related to the ordering of axes labels in the heatmap plot of training results was fixed by Mateusz Dziedzic in \issue{620}.
+		\item A variable importance method for model averaged neural networks was added. 
+		\item More logic was added so that the \code{predict} method behaves well when a variable is subtracted from a model formula from \issue{574}.
+		\item More documentation was added for the \code{class2ind} function (\issue{592}). 
+		\item Fixed the formatting of the design matrices in the \code{dummyVars} man file.
+		\item A note was added to \code{?trainControl} about using custom resampling methods (\issue{584}). 
+		\item A bug was fixed related to SMOTE and ROSE sampling with one predictor (\issue{612}).  
+		\item Due to changes in the \cpkg{kohonen} package, the \code{bdk} model is no longer available and the code behind the \code{xyf} model has changes substantially (including the tuning parameters). Also, when using \code{xyf}, a check is conducted to make sure that a recent version of the \cpkg{kohonen} package is being used. 
+		\item Changes to \code{xgbTree} and \code{xgbLinear} to help with sparse matrix inputs for \issue{593}. Sparse matrices are not allowed when preprocessing or subsampling are used. 
+		\item Several PLS models were using the classical orthogonal scores algorithm when discriminant analysis was conducted (despite using \code{simpls}, \code{widekernelpls}, or \code{kernelpls}). Now, the PLSDA model estimation method is consistent with the method requested (\issue{610}). 
+		\item Added Multi-Step Adaptive MCP-Net (\code{method = "msaenet"}) for \issue{561}. 
+		\item The variable importance score for linear regression was modified so that missing values in the coefficients are converted to zero.
+		\item In \code{train}, \code{x} is now required to have column names. 
+
+	}
+}
+
+\section{Changes in version 6.0-73}{
+	\itemize{
+		\item Negative binomial generalized linear models (\code{MASS:::glm.nb}) were added \issue{476}
+		\item \code{mnLogLoss} now returns a named vector (\issue{514}, bug found by Jay Qi)
+		\item A bunch of method/class related bugs induced by the previous version were fixed. 
+	}
+}
+
+\section{Changes in version 6.0-72}{
+	\itemize{
+		\item The inverse hyperbolic sine transformation was added to \code{preProcess} \issue{56}
+		\item Tyler Hunt moved the ROC code from the \cpkg{pROC} package to the \cpkg{ModelMetrics} package which should make the computations more efficient \issue{482}. 
+		\item \code{train} does a better job of respecting the original format of the input data \issue{474}
+		\item A bug in \code{bdk} and \code{xyf} models was fixed where the appropriate number of parameter combinations are tested during random search.  
+		\item A bug in \code{rfe} was fixed related to neural networks found by david-machinelearning \issue{485}
+		\item Neural networks via stochastic gradient descent (\code{method = "mlpSGD"}) was adapted for classification and a variable importance calculation was added. 
+		\item \href{http://www.h2o.ai/}{h2o} versions of glmnet and gradient boosting machines were added with methods \code{"glmnet\_h2o"} and \code{"gbm\_h2o"}. These methods are not currently optimized.  \issue{283}
+		\item The fuzzy rule-based models (\code{WM}, \code{SLAVE}, \code{SBC}, \code{HYFIS}, \code{GFS.THRIFT}, \code{GFS.LT.RS}, \code{GFS.GCCL}, \code{GFS.FR.MOGUL}, \code{FS.HGD}, \code{FRBCS.W}, \code{FRBCS.CHI}, \code{FIR.DM}, \code{FH.GBML}, \code{DENFIS}, and \code{ANFIS}) were modified so that the user can pass in the predictor ranges using the \code{range.data} argument to those functions. \issue{498}
+		\item A variable importance method was added for boosted generalized linear models \issue{493}
+		\item \code{preProcess} now has an option to filter out highly correlated predictors. 
+		\item \code{trainControl} now has additional options to modify the parameters of near-zero variance and correlation filters. See the \code{preProcOptions} argument. 
+		\item The \code{rotationForest} and \code{rotationForestCp} methods were revised to evaluate only \emph{feasible} values of the parameter \code{K} (the number of variable subsets). The underlying \code{rotationForest} function reduces this parameter until values of \code{K} divides evenly into the number of parameters.   
+		\item The \code{skip} option from \code{createTimeSlices} was added to \code{trainControl} \issue{491}
+		\item \code{xgb.train}'s option \code{subsample} was added to the \code{xgbTree} model \issue{464}
+	}
+}
+
+\section{Changes in version 6.0-71}{
+	\itemize{
+		\item Precision, recall, and F measure functions were added along with one called \code{prSummary} that is analogous to \code{twoClassSummary}. Also, \code{confusionMatrix} gains an argument called \code{mode} that dictates what output is shown. 
+		\item schistyakov added additional tuning parameters to the robust linear model code \issue{454}. Also for \code{rlm} and \code{lm} schistyakov added the ability to tune over the intercept/no intercept model. 
+		\item Generalized additive models for very large datasets (\code{bam} in \cpkg{mgcv}) was added \issue{453}
+		\item Two more linear SVM models were added from the \cpkg{LiblineaR} package with model codes \code{svmLinear3} and \code{svmLinearWeights2} (\issue{441})
+		\item The \code{tau} parameter was added to all of the least square SVM models (\issue{415})
+		\item A new data set (called \code{scat}) on animal droppings was added. 
+		\item A significant bug was fixed where the internals of how R creates a model matrix was ignoring \code{na.action} when the default was set to \code{na.fail} \issue{461}. This means that \code{train} will now immediately fail if there are any missing data. To use imputation, use \code{na.action = na.pass} and the imputation method of your choice in the \code{preProcess} argument. Also, a warning is issued if the user asks for imputation but uses the formula method and excludes missing data in \code{na.action} 
+
+	}
+}
+
+\section{Changes in version 6.0-70}{
+	\itemize{
+		\item Based on a comment by Alexis Sarda, \code{method = "ctree2"} does not fix \code{mincriterion = 0} and tunes over this parameter. For a fixed depth, \code{mincriterion} can further prune the tree \issue{409}. 
+		\item A bug in KNN imputation was fixed (found by saviola777) that occurred when a factor predictor was in the data set \issue{404}.  
+		\item Infrastructure changes were made so that \code{train} tries harder to respect the original class of the outcome. For example, if an ordered factor is used as the outcome with a modeling function that treats is as an unordered factor, the model still produces an ordered factor during prediction.  
+		\item The \code{ranger} code now allows for case weights \issue{414}. 
+		\item \code{twoClassSim} now has an option to compute ordered factors.
+		\item High-dimensional regularized discriminant analysis and, regularized linear discriminant analysis, and several variants of diagonal discriminant analysis  from the \cpkg{sparsediscrim} package were added (\code{method = "hdrda"}, \code{method = "rlda"}, and \code{method = "dda"}, respectively) \issue{313}.  
+		\item A neural network regression model optimized by stochastic gradient decent from the \cpkg{FCNN4R} package was added. The model code is \code{mlpSGD}.
+		\item Several models for ordinal outcomes were added: \code{rpartScore} (from the \cpkg{rpartScore} package), \code{ordinalNet} (\cpkg{ordinalNet}), \code{vglmAdjCat} (\cpkg{VGAM}), \code{vglmContRatio} (\cpkg{VGAM}), and \code{vglmCumulative} (\cpkg{VGAM}). Note that, for models that load \cpkg{VGAM}, there is a conflict such that the \code{predictors} class code from \cpkg{caret} is masked. To use that method, you can use \code{caret:::predictors.train()} instead of \code{predictors()}.
+		\item Another high performance random forest package (\cpkg{Rborist}) was exposed through \cpkg{caret}. The model code is \code{method = "Rborist"} \issue{418}
+		\item Xavier Robin fixed a bug related to the area under the ROC curve in \issue{431}.
+		\item A bug in \code{print.train} was fixed when LOO CV was used \issue{435}
+		\item With RFE, a better error message drafted by mikekaminsky is printed when the number of importance measures is off \issue{424}
+		\item Another bug was fixed in estimating the prediction time when the formula method was used \issue{420}. 
+		\item A linear SVM model was added that uses class weights.
+		\item The linear SVM model using the \cpkg{e1071} package (\code{method = "svmLinear2"}) had the \code{gamma} parameter for the RBF kernel removed. 
+		\item Xavier Robin committed changes to make sure that the area under the ROC is accurately estimated \issue{431}
+ 	}  
+}
+
+
+\section{Changes in version 6.0-68}{
+	\itemize{
+		\item \code{print.train} no longer shows the standard deviation of the resampled values unless the new option is used (\code{print.train(, showSD = TRUE)}). When shown, they are within parentheses (e.g. "4.24 (0.493)"). 
+ 		\item An adjustment the innards of adaptive resampling was changed so that the test for linear dependencies is more stringent.  
+		\item A bug in the bootstrap 632 estimate was found and fixed by Alexis Sarda \issue{349} \issue{353}. 
+		\item The \code{cforest} module's \code{oob} element was modified based on another bug found by Alexis Sarda \issue{351}.
+		\item The methods for \code{bagEarth}, \code{bagEarthGCV}, \code{bagFDA}, \code{bagFDAGCV}, \code{earth}, \code{fda}, and \code{gcvEarth} models have been updates so that case-weights can be used. 
+		\item The \code{rda} module contained a bug found by Eric Czech \issue{369}.
+		\item A bug was fixed for printing out the resampling details with LGOCV found by github user zsharpm \issue{366}
+		\item A new data set was added (\code{data(Sacramento)}) with sale prices of homes. 
+		\item Another adaboost algorithm (\code{method = "adaboost"} from the \cpkg{fastAdaboost} package) was added \issue{284}.  
+		\item Yet another boosting algorithm (\code{method = "deepboost"} from the \cpkg{deepboost} package) was added \issue{388}. 
+		\item Alexis Sarda made changes to the confusion matrix code for \code{train}, \code{rfe}, and \code{sbf} objects that more rationally normalizes the resampled tables \issue{355}.
+		\item A bug in how \cpkg{RSNNS} perceptron models were tuned (found by github user smlek) was fixed \issue{392}.
+		\item A bug in computing the bootstrap 632 estimate was fixed (found by Stu) \issue{382}.
+		\item John Johnson contributed an update to \code{xgbLinear} \issue{372}. 
+		\item Resampled confusion matrices are not automatically computed when there are 50 or more classes due to the storage requirements (\issue{356}). However, the relevant functions have been updated to use the out-of-sample predictions instead (when the user asks for them to be returned by the function). 
+		\item Some changes were made to \code{predict.train} to error trap (and fix) cases when predictions are requested without referencing a \code{newdata} object \issue{347}.
+		\item Github user pverspeelt identified a bug in our model code for \code{glmboost} (and \code{gamboost}) related to the \code{mstop} function modifying the model object in memory. It was fixed \issue{396}. 
+		\item For \issue{346}, an option to select which samples are used to fit the final model, called \code{indexFinal}, was added to \code{trainControl}.  
+		\item For issue \issue{390} found by JanLauGe, a bug was fixed in \code{dummyVars} related to the names of the resulting data set. 
+		\item Models \code{rknn} and \code{rknnBel} were removed since their package is no longer on CRAN.
+	}  
+}
+
+\section{Changes in version 6.0-66}{
+	\itemize{
+		\item Model averaged naive Bayes (\code{method = "manb"}) from the \cpkg{bnclassify} package was added. 
+		\item \code{blackboost} was updated to work with outcomes with 3+ classes. 
+		\item A new model \code{rpart1SE} was added. This has no tuning parameters and resamples the internal \cpkg{rpart} procdure of pruning using the one standard error method. 
+		\item Another model (\code{svmRadialSigma}) tunes over the cost parameter and the RBF kernel parameter sigma. In the latter case, using \code{tuneLength} will, at most, evaluate six values of the kernel parameter. This enables a broad search over the cost parameter and a relatively narrow search over \code{sigma}.
+		\item Additional model tags for "Accepts Case Weights", "Two Class Only", "Handle Missing Predictor Data", "Categorical Predictors Only", and "Binary Predictors Only" were added. In some cases, a new model element called "notes" was added to the model code. 
+		\item A pre-processing method called "conditionalX" was added that eliminates predictors where the conditional distribution (X|Y) for that predictor has a single value. See the \code{checkConditionalX} function for details. This is only used for classification.  \issue{334}
+		\item A bug in the naive Bayes prediction code was found by github user pverspeelt and was fixed. \issue{345}
+		\item Josh Brady (doublej2) found and fixed an issue with \code{DummyVars} \issue{344}
+		\item A bug related to recent changes to the \cpkg{ranger} package was fixed \issue{320}
+		\item Dependencies on external software can now be checked in the model code. See \href{https://github.com/topepo/caret/blob/master/models/files/pythonKnnReg.R}{\code{pythonKnnReg}} for an example. This also removes the overall package dependency on \cpkg{rPython} \issue{328}. 
+		\item The tuning parameter grid for \code{enpls} and \code{enpls.fs} were changed to avoid errors. 
+		\item A bug was fixed \issue{342} where the data used for prediction was inappropriately converted from its original class. 
+		\item Matt (aka washcycle) added option to return column names to \code{nearZeroVar} function
+		\item Homer Strong fixed \code{varImp} for \code{glmnet} models so that they return the absolute value of the regression coefficients \issue{173} \issue{190}
+		\item The basic naive Bayes method (\code{method = "nb"}) gained a tuning parameter, \code{adjust}, that adjusts the bandwidth (see \code{?density}). The parameter is ignored when \code{usekernel = FALSE}.
+	} 
+}
+
+
+\section{Changes in version 6.0-62}{
+	\itemize{
+		\item From the \cpkg{randomGLM} package, a model of the same name was added.
+		\item From \cpkg{monomvn} package, models for the Bayesian lasso and ridge regression were added. In the latter case, two methods were added. \code{blasso} creates predictions using the mean of the posterior distributions but sets some parameters specifically to zero based on the tuning parameter called \code{sparsity}. For example, when \code{sparsity = .5}, only coefficients where at least half the posterior estimates are nonzero are used. The other model,  \code{blassoAveraged}, makes predictions across all of the realizations in the posterior distribution without coercing any coefficients to zero. This is more consistent with Bayesian model averaging, but is unlikely to produce very sparse solutions. 
+		\item From the \cpkg{spikeslab} package, a regression model was added that emulates the procedure used by \code{cv.spikeslab} where the tuning variable is the number of retained predictors.  
+		\item A bug was fixed in adaptive resampling (found by github user elephann) \issue{304} 
+		\item Fixed another adaptive resampling bug flagged by github user elephann related to the latest version of the \cpkg{BradleyTerry2} package. Thanks to Heather Turner for the fix \issue{310}
+		\item Yuan (Terry) Tang added more tuning parameters to \code{xgbTree} models. 
+		\item Model \code{svmRadialWeights} was updated to allow for class probabilities. Previously, \cpkg{kernlab} did not change the probability estimates when weights were used.  
+		\item A \cpkg{ggplot2} method for \code{varImp.train} was added \issue{231}
+		\item Changes were made for the package to work with the next version of \cpkg{ggplot2} \issue{317}
+		\item Github user \code{fjeze} added new models \code{mlpML} and \code{mlpWeightDecayML} that extend the existing \cpkg{RSNNS} models to multiple layers. \code{fjeze} also added the \code{gamma} parameter to the \code{svmLinear2} model.  
+		\item A function for generating data for learning curves was added. 
+		\item The range of SVM cost values explored in random search was expanded.
+	} 
+}
+
+\section{Changes in version 6.0-58}{
+	\itemize{
+		\item A major bug was fixed (found by Harlan Harris) where pre-processing objects created from versions of the package prior to 6.0-57 can give incorrect results when run with 6.0-57 \issue{282}.
+		\item \code{preProcess} can now remove predictors using zero- and near zero-variance filters via (\code{method} values of \code{"zv"} and \code{"nzv"}). When used, these filters are applied to numeric predictors prior to all other pre-processing operations.    
+		\item \code{train} now throws an error for classification tasks where the outcome has a factor level with no observed data \issue{260}. 
+		\item Character outcomes passed to \code{train} are not converted to factors. 
+		\item A bug was found and fixed in this package's class probability code for \code{gbm} models when a single multinomial observation is predicted \issue{274}.
+		\item A new option to \code{ggplot.train} was added that highlights the optimal tuning parameter setting in the cases where grid search is used (thanks to Balaji Iyengar (github: bdanalytics)). 
+		\item In \code{trainControl}, the argument \code{savePredictions} can now be character values (\code{"final"}, \code{"all"} or \code{"none"}). Logicals can still be used and match to  \code{"all"} or \code{"none"}.  
+	} 
+}
+
+
+\section{Changes in version 6.0-57}{
+	\itemize{
+		\item Hyperparameter optimization via random search is now availible. See the new \href{http://topepo.github.io/caret/random-hyperparameter-search.html}{help page} for examples and syntax. 
+		\item \code{preProcess} now allows (but ignores) non-numeric predictor columns. 
+		\item Models were added for optimal weighted and stabilized nearest neighbor classifiers from the \cpkg{snn} package were added with model codes \code{snn} and \code{ownn}
+		\item Random forests using the excellent \cpkg{ranger} package were added (\code{method = "ranger"})
+		\item An additional variation of rotation forests was added (\code{rotationForest2}) that also tunes over \code{cp}. Unfortunately, the sub-model trick can't be utilized in this instance.  
+		\item Kernelized distance weighted discriminant analysis models from \cpkg{kerndwd} where added (\code{dwdLieanr}, \code{dwdPoly}, and \code{dwdRadial})
+		\item A bug was fixed with \code{rfe} when \code{train} was used to generate a classification model but class probabilities were not (or could not be) generated \issue{234}. 
+		\item Can Candan added a python model \code{sklearn.neighbors.KNeighborsRegressor} that can be accessed via \code{train} using the \cpkg{rPython} package. The python modules \code{sklearn} and \code{pandas} are required for this to run. 
+		\item Jason Aizkalns fixed a bunch of typos. 
+		\item MarwaNabil found a bug with \code{lift} and missing values \issue{225}. This was fixed such that missing values are removed prior to the calculations (within each model)
+		\item Additional options were added to \code{LPH07_1} so that two class data can also be simulated and predictors are converted to factors. 
+		\item The model-specific code for computing out-of-bag performance estimates were moved into the model code library \issue{230}.
+		\item A variety of naive Bayes and tree augmented naive Bayes classifier from the \cpkg{bnclassify} package were added. Variations include simple models (methods labeled as \code{"nbDiscrete"} and \code{"tan"}), models using attribute weighting (\code{"awnb"} and \code{"awtan"}), and wrappers that use search methods to optimize the network structure (\code{"nbSearch"} and \code{"tanSearch"}). In each case, the predictors and outcomes must all be factor variables; for that reason, using the non-formula interface to \code{train} (e.g. \code{train(x, y)}) is critical to preserve the factor structure of the data. 
+		\item A function called \code{multiClassSummary} was added to compute performance values for problems with three or more classes. It works with or without predicted class probabilities \issue{107}.   
+		\item \code{confusionMatrix} was modified to deal with name collisions between this package and \cpkg{RSNNS} \issue{256}.
+		\item A bug in how the LVQ tune grid is filtered was fixed.
+		\item A bug in \code{preProcess} for ICA and PCA was fixed. 
+		\item Bugs in \code{avNNet} and \code{pcaNNet} when predicting class probabilities were fixed \issue{#261}. 
+	} 
+}
+
+
+\section{Changes in version 6.0-52}{
+	\itemize{
+		\item A new model using the \cpkg{randomForest} and \cpkg{inTrees} packages called \code{rfRules} was added. A basic random forest model is used and then is decomposed into rules (of user-specified complexity). The \cpkg{inTrees} package is used to prune and optimize the rules. Thanks to Mirjam Jenny who suggested the workflow. 
+		\item Other new models (and their packages): \code{bartMachine} (\cpkg{bartMachine}), \code{rotationForest} (\cpkg{rotationForest}), \code{sdwd} (\cpkg{sdwd}), \code{loclda} (\cpkg{klaR}), \code{nnls} (\cpkg{nnls}), \code{svmLinear2} (\cpkg{e1071}), \code{rqnc} (\cpkg{rqPen}), and \code{rqlasso} (\cpkg{rqPen})
+		\item When specifying your own resampling indices, a value of \code{method = "custom"} can be used with \code{trainControl} for better printing. 
+		\item Tim Lucas fixed a bug in \code{avNNet} when \code{bag = TRUE}
+		\item Fixed a bug found by \code{ruggerorossi} in \code{method = "dnn"} with classification.
+		\item A new option called \code{sampling} was added to \code{trainControl} that allows users to subsample their data in the case of a class imbalance. Another \href{http://topepo.github.io/caret/sampling.html}{help page} was added to explain the features. 
+		\item Class probabilities can be computed for \code{extraTrees} models now.   
+		\item When PCA pre-processing is conducted, the variance trace is saved in an object called \code{trace}.
+		\item More error traps were added for common mistakes (e.g. bad factor levels in classification).
+		\item An internal function (\code{class2ind}) that can be used to make dummy variables for a single factor vector is now documented and exported.  
+		\item A bug was fixed in the \code{xyplot.lift} where the reference line was incorrectly computed. Thanks to Einat Sitbon for finding this. 
+		\item A bug related to calculating the Box-Cox transformation found by John Johnson was fixed. 
+		\item github user \code{EdwinTh} developed a faster version of \code{findCorrelation} and found a bug in the original code. \code{findCorrelation} has two new arguments, one of which is called \code{exact} which defaults to use the original (fixed) function. Using \code{exact = FALSE} uses the faster version. The fixed version of the "exact" code is, on average, 26-fold slower than the current version (for 250x250 matrices) although the average time for matrices of this size was only 26s. The exact version yields subsets that are, one average, 2.4 percent smaller than the other versions. This difference will be more significant for smaller matrices. The faster ("approximate") version of the code is 8-fold faster than the current version.  
+		\item github user \code{slyuee} found a bug in the \code{gam} model fitting code. 
+		\item Chris Kennedy fixed a bug in the \code{bartMachine} variable importance code. 
+		} 
+}
+
+\section{Changes in version 6.0-47}{
+	\itemize{
+		\item CHAID from the R-Forge package \href{http://r-forge.r-project.org/projects/chaid/}{\pkg{CHAID}}
+		\item Models \code{xgbTree} amd \code{xgbLinear} from the \code{xgboost} package were added. That package is not on CRAN  and can be installed from github using the \cpkg{devtools} package and \code{install_github('dmlc/xgboost',subdir='R-package')}.
+		\item \code{dratewka} enabled \code{rbf} models for regression. 
+		\item A summary function for the multinomial likelihood called \code{mnLogLoss} was added. 
+		\item The total object size for \code{preProces} objects that used bagged imputation was reduced almost 5-fold. 
+		\item A new option to \code{trainControl} called \code{trim} was added where, if implemented, will reduce the model's footprint. However, features beyond simple prediction may not work. 
+		\item A rarely occurring bug in \code{gbm} model code was fixed (thanks to Wade Cooper)
+		\item \code{splom.resamples} now respects the \code{models} argument
+		\item A new argument to \code{lift} called \code{cuts} was added to allow more control over what thresholds are used to calculate the curve.
+		\item The \code{cuts} argument of \code{calibration} now accepts a vector of cut points.
+		\item Jason Schadewald noticed and fixed a bug in the man page for \code{dummyVars}
+		\item Call objects were removed from the following models: \code{avNNet}, \code{bagFDA}, \code{icr}, \code{knn3}, \code{knnreg}, \code{pcaNNet}, and \code{plsda}.
+		\item An argument was added to \code{createTimeSlices} to thin the number of resamples
+		\item The RFE-related functions \code{lrFuncs}, \code{lmFuncs}, and \code{gamFuncs} were updated so that \code{rfe} accepts a matrix \code{x} argument. 
+		\item Using the default grid generation with \code{train} and \code{glmnet}, an initial \code{glmnet} fit is created with \code{alpha = 0.50} to define the \code{lambda} values. 
+		\item \code{train} models for \code{"gbm"}, \code{"gam"}, \code{"gamSpline"}, and \code{"gamLoess"} now allow their respective arguments for the outcome probability distribution to be passed to the underlying function.
+		\item A bug in \code{print.varImp.train} was fixed. 
+		\item \code{train} now returns an additional column called \code{rowIndex} that is exposed when calling the summary function during resampling. 
+		\item The ability to compute class probabilities was removed from the \code{rpartCost} model since they are unlikely to agree with the class predictions. 
+		\item \code{extractProb} no longer redundantly calls \code{extractPrediction} to generate the class predictions. 
+		\item A new function called \code{var_seq} was added that finds a sequence of integers that can be useful for some tuning parameters such as random forests \code{mtry}. Model modules were update to use the new function. 
+		\item \code{n.minobsinnode} was added as a tuning parameter to \code{gbm} models. 
+		\item For models using out-of-bag resampling, \code{train} now properly checks the \code{metric} argument against the names of the measured outcomes. 
+		\item Both \code{createDataParition} and \code{createFolds} were modified to better handle cases where one or more class have very low numbers of data points.  
+	}
+}
+
+\section{Changes in version 6.0-41}{
+	\itemize{
+		\item The license was changed to GPL (>= 2) to accommodate new code from the GA package. 
+		\item New feature selection functions \code{gafs} and \code{safs} were added, along with helper functions and objects, were added. The package HTML was updated to expand more about feature selection. 
+		\item From the \cpkg{adabag} package, two new models were added: \code{AdaBag} and \code{AdaBoost.M1}. 
+		\item Weighted subspace random forests from the \cpkg{wsrf} package was added.
+		\item Additional bagged FDA and MARS models were added (model codes \code{bagFDAGCV} and \code{bagEarthGCV}) were added that use the GCV statistic to prune the model. This leads to memory reductions during training. 
+		\item The model code for \code{ada} had a bug fix applied and the code was adapted to use the "sub-model trick" so it should train faster. 				
+		\item A bug was fixed related to imputation when the formula method is used with \code{train}
+		\item The old \code{drop = FALSE} bug was fixed in \code{getTrainPerf}
+		\item A bug was fixed for custom models with no labels. 
+		\item A bug fix was made for bagged MARS models when predicting probabilities. 
+		\item In \code{train}, the argument \code{last} was being incorrectly set for the last model. 
+		\item Reynald Lescarbeau refactored \code{findCorrelation} to make it faster. 
+		\item The apparent performance values are not reported by  \code{print.train} when the bootstrap 632 estimate is used. 
+		\item When a required package is missing, the code stops earlier with a more explicit error message.
+	}
+}
+
+\section{Changes in version 6.0-37}{
 	\itemize{
 		\item Brenton Kenkel added ordered logistic or probit regression to \code{train} using \code{method = "polr"} from \cpkg{MASS} 
 		\item \code{LPH07_1} now encodes the noise variables as binary
@@ -14,7 +327,9 @@
 		\item A bug using \code{gbm} with Poisson data was fixed (thanks to user eriklampa)
 		\item \code{sbfControl} now has a \code{multivariate} option where all the predictors are exposed to the scoring function at once.
 		\item A function \code{compare_models} was added that is a simple comparison of models via \code{diff.resamples)}. 
-		\imte The row names for the \code{variables} component of \code{rfe} objects were simplified.  
+		\item The row names for the \code{variables} component of \code{rfe} objects were simplified.  
+		\item Philipp Bergmeir found a bug that was fixed where \code{bag} would not run in parallel. 
+		\item \code{predictionBounds} was not implemented during resampling.
 	}
 }
 
@@ -254,9 +569,9 @@ eliminated from the depends field. Additionally, a few were moved to exports.
 
  \item A bug was (hopefully) fixed that occurred when some type of 
  parallel processing was used with \code{train}. The problem is 
- that the \cpkg{methods} package was not being loaded in the workers. 
+ that the \code{methods} package was not being loaded in the workers. 
  While reproducible, it is unknown why this occurs and why it is 
- only for some technologies and systems. The \cpkg{methods} package 
+ only for some technologies and systems. The \code{methods} package 
  is now a formal dependency and we coerce the workers to load it 
  remotely. 
  
@@ -479,7 +794,7 @@ row from the original data that is being held-out.
 long standing warnings of the rda packages since more than half a year
 now, we set the package to ORPHANED.")
 
-\item \cpkg{C5.0} was added (model codes \code{C5.0}, \code{C5.0Tree} and
+\item \cpkg{C50} was added (model codes \code{C5.0}, \code{C5.0Tree} and
 \code{C5.0Rules}).
 
 \item Fixed a bug in \code{train} with NaiveBayes when \code{fL != 0}
@@ -1576,8 +1891,8 @@ scatter plots are models or metrics.
 \section{Changes in version 4.50}{
 \itemize{ 
 
-\item Added \code{\link{dotplot.resamples}} plus acknowledgements to Hothorn et al 
-(2005) and Eugster et al (2008)
+\item Added \code{\link{dotplot.resamples}} plus acknowledgements to Hothorn et al.
+(2005) and Eugster et al. (2008)
 
  }
 }
@@ -2191,7 +2506,7 @@ splits.
 \item Added a new class called \code{predictors} that returns the
 names of the predictors that were used in the final model.
 
-\item Also added \code{ppr} from the \cpkg{stats} package.
+\item Also added \code{ppr} from the \code{stats} package.
 
 \item Minor update to the project web page to deal with IE issues
 

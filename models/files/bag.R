@@ -5,10 +5,10 @@ modelInfo <- list(label = "Bagged Model",
                   parameters = data.frame(parameter = c('vars'),
                                           class = c('numeric'),
                                           label = c('#Randomly Selected Predictors')),
-                  grid = function(x, y, len = NULL) 
+                  grid = function(x, y, len = NULL, search = "grid") 
                     data.frame(vars = ncol(x)),
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
-                    out <- bag(x, y, vars = param$vars, ...)
+                    out <- caret::bag(x, y, vars = param$vars, ...)
                     out$xNames <- colnames(x)
                     out
                     },
@@ -18,6 +18,7 @@ modelInfo <- list(label = "Bagged Model",
                     predict(modelFit, newdata, type= "prob"),
                   predictors = function(x, ...)
                     x$xNames,
+                  levels = function(x) x$obsLevels,
                   varImp = NULL,
                   tags = c("Bagging", "Ensemble Model"),
                   sort = function(x) x)

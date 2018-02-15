@@ -1,20 +1,34 @@
 modelInfo <- list(label = "Stochastic Gradient Boosting",
                   library = c("gbm", "plyr"),
                   type = c("Regression", "Classification"),
-                  parameters = data.frame(parameter = c('n.trees', 'interaction.depth', 'shrinkage'),
-                                          class = c("numeric", "numeric", "numeric"),
-                                          label = c('# Boosting Iterations', 'Max Tree Depth', 'Shrinkage')),
-                  grid = function(x, y, len = NULL) expand.grid(interaction.depth = seq(1, len),
-                                                                n.trees = floor((1:len) * 50),
-                                                                shrinkage = .1),
-                  loop = function(grid) {     
-                    loop <- ddply(grid, c("shrinkage", "interaction.depth"),
+                  parameters = data.frame(parameter = c('n.trees', 'interaction.depth', 
+                                                        'shrinkage', 'n.minobsinnode'),
+                                          class = rep("numeric", 4),
+                                          label = c('# Boosting Iterations', 'Max Tree Depth', 
+                                                    'Shrinkage', 'Min. Terminal Node Size')),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- expand.grid(interaction.depth = seq(1, len),
+                                         n.trees = floor((1:len) * 50),
+                                         shrinkage = .1,
+                                         n.minobsinnode = 10)
+                    } else {
+                      out <- data.frame(n.trees = floor(runif(len, min = 1, max = 5000)),
+                                        interaction.depth = sample(1:10, replace = TRUE, size = len),         
+                                        shrinkage = runif(len, min = .001, max = .6),
+                                        n.minobsinnode = sample(5:25, replace = TRUE, size = len) )
+                      out <- out[!duplicated(out),]
+                    }
+                    out
+                  },
+                  loop = function(grid) {
+                    loop <- plyr::ddply(grid, c("shrinkage", "interaction.depth", "n.minobsinnode"),
                                   function(x) c(n.trees = max(x$n.trees)))
                     submodels <- vector(mode = "list", length = nrow(loop))
-                    for(i in seq(along = loop$n.trees))
-                    {
+                    for(i in seq(along = loop$n.trees)) {
                       index <- which(grid$interaction.depth == loop$interaction.depth[i] & 
-                                       grid$shrinkage == loop$shrinkage[i])
+                                       grid$shrinkage == loop$shrinkage[i] &
+                                       grid$n.minobsinnode == loop$n.minobsinnode[i])
                       trees <- grid[index, "n.trees"] 
                       submodels[[i]] <- data.frame(n.trees = trees[trees != loop$n.trees[i]])
                     }    
@@ -26,13 +40,11 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                     ## 'distribution' in the control file. If the user wants to over-ride this,
                     ## this next bit will allow this.
                     theDots <- list(...)
-                    if(any(names(theDots) == "distribution"))
-                    {
+                    if(any(names(theDots) == "distribution")) {
                       modDist <- theDots$distribution
                       theDots$distribution <- NULL
                     } else {
-                      if(is.numeric(y))
-                      {
+                      if(is.numeric(y)) {
                         modDist <- "gaussian"
                       } else modDist <- if(length(lev) == 2)  "bernoulli" else "multinomial"
                     }
@@ -40,23 +52,26 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                     ## check to see if weights were passed in (and availible)
                     if(!is.null(wts)) theDots$w <- wts     
                     if(is.factor(y) && length(lev) == 2) y <- ifelse(y == lev[1], 1, 0)
-                    
+                    if(!is.data.frame(x) | inherits(x, "tbl_df")) 
+                      x <- as.data.frame(x)
+
                     modArgs <- list(x = x,
                                     y = y,
                                     interaction.depth = param$interaction.depth,
                                     n.trees = param$n.trees,
                                     shrinkage = param$shrinkage, 
+                                    n.minobsinnode = param$n.minobsinnode,
                                     distribution = modDist)
+                    if(any(names(theDots) == "family")) modArgs$distribution <- NULL
                     
                     if(length(theDots) > 0) modArgs <- c(modArgs, theDots)
-                    
-                    do.call("gbm.fit", modArgs)
+
+                    do.call(gbm::gbm.fit, modArgs)
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     out <- predict(modelFit, newdata, type = "response",
                                    n.trees = modelFit$tuneValue$n.trees)
                     out[is.nan(out)] <- NA
-                    
                     out <- switch(modelFit$distribution$name,
                                   multinomial = {
                                     ## The output is a 3D array that is
@@ -70,12 +85,11 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                                            modelFit$obsLevels[1], 
                                            modelFit$obsLevels[2])
                                   },
-                                  gaussian =, laplace =, tdist =, poisson = {
+                                  gaussian =, laplace =, tdist =, poisson =, quantile = {
                                     out
                                   })
                     
-                    if(!is.null(submodels))
-                    {
+                    if(!is.null(submodels)) {
                       tmp <- predict(modelFit, newdata, type = "response", n.trees = submodels$n.trees)
                       out <- switch(modelFit$distribution$name,
                                     multinomial = {
@@ -85,6 +99,7 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                                       tmp <- apply(tmp, 3, function(x) apply(x, 1, which.max))
                                       if(is.vector(tmp)) tmp <- matrix(tmp, nrow = 1)
                                       tmp <- t(apply(tmp, 1, function(x, lvl) lvl[x], lvl = lvl))
+                                      if(nrow(tmp) == 1 & nrow(newdata) > 1) tmp <- t(tmp)
                                       tmp <- as.list(as.data.frame(tmp, stringsAsFactors = FALSE))
                                       c(list(out), tmp)
                                     },
@@ -96,7 +111,7 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                                       tmp <- as.list(as.data.frame(tmp, stringsAsFactors = FALSE))
                                       c(list(out), tmp)
                                     },
-                                    gaussian =, laplace =, tdist =,  poisson =  {
+                                    gaussian =, laplace =, tdist =,  poisson =, quantile=  {
                                       ## an nxt matrix
                                       tmp <- as.list(as.data.frame(tmp))
                                       c(list(out), tmp)
@@ -112,9 +127,9 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                     
                     out <- switch(modelFit$distribution$name,
                                   multinomial = {
-                                    ## The output is a 3D array that is
-                                    ## nxcx1
-                                    out[,,1]
+                                    out <- if(dim(out)[3] == 1) as.data.frame(out) else out[,,1]
+                                    colnames(out) <- modelFit$obsLevels
+                                    out
                                   },
                                   bernoulli =, adaboost =, huberized = {
                                     ## The data come back as an nx1 vector
@@ -127,8 +142,7 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                                     out
                                   })
                     
-                    if(!is.null(submodels))
-                    {
+                    if(!is.null(submodels)) {
                       tmp <- predict(modelFit, newdata, type = "response", n.trees = submodels$n.trees)
                       tmp <- switch(modelFit$distribution$name,
                                     multinomial = {
@@ -172,7 +186,7 @@ modelInfo <- list(label = "Stochastic Gradient Boosting",
                     }
                     out
                   },
-                  tags = c("Tree-Based Model", "Boosting", "Ensemble Model", "Implicit Feature Selection"),
+                  tags = c("Tree-Based Model", "Boosting", "Ensemble Model", "Implicit Feature Selection", "Accepts Case Weights"),
                   sort = function(x) {
                     # This is a toss-up, but the # trees probably adds
                     # complexity faster than number of splits

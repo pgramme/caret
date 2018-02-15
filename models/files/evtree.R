@@ -5,8 +5,14 @@ modelInfo <- list(label = "Tree Models from Genetic Algorithms",
                   parameters = data.frame(parameter = c('alpha'),
                                           class = c('numeric'),
                                           label = c('Complexity Parameter')),
-                  grid = function(x, y, len = NULL)
-                    data.frame(alpha = seq(0, 1, length = len)),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- data.frame(alpha = seq(1, 3, length = len)) 
+                    } else {
+                      out <- data.frame(alpha = runif(len, min = 1, max = 5))
+                    }
+                    out
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...){
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
                     dat$.outcome <- y
@@ -17,8 +23,8 @@ modelInfo <- list(label = "Tree Models from Genetic Algorithms",
                       theDots$control$alpha <- param$alpha 
                       ctl <- theDots$control
                       theDots$control <- NULL
-                    } else ctl <- evtree.control(alpha = param$alpha)          
-                    
+                    } else ctl <- evtree::evtree.control(alpha = param$alpha)
+
                     ## pass in any model weights
                     if(!is.null(wts)) theDots$weights <- wts
                     
@@ -26,10 +32,11 @@ modelInfo <- list(label = "Tree Models from Genetic Algorithms",
                                         data = dat,
                                         control = ctl),
                                    theDots)
-                    
-                    out <- do.call("evtree", modelArgs)
-                    out  
+
+                    out <- do.call(evtree::evtree, modelArgs)
+                    out
                   },
+                  levels = function(x) x$obsLevels,
                   predict = function(modelFit, newdata, submodels = NULL) {
                     if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
                     predict(modelFit, newdata)
@@ -38,5 +45,5 @@ modelInfo <- list(label = "Tree Models from Genetic Algorithms",
                     if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
                     predict(modelFit, newdata, type = "prob")
                     },
-                  tags = c("Tree-Based Model", "Implicit Feature Selection"),
+                  tags = c("Tree-Based Model", "Implicit Feature Selection", "Accepts Case Weights"),
                   sort = function(x) x[order(x[,1]),])

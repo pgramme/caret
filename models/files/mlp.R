@@ -5,8 +5,14 @@ modelInfo <- list(label = "Multi-Layer Perceptron",
                   parameters = data.frame(parameter = c('size'),
                                           class = c('numeric'),
                                           label = c('#Hidden Units')),
-                  grid = function(x, y, len = NULL) 
-                    data.frame(size =  ((1:len) * 2) - 1),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- data.frame(size =  ((1:len) * 2) - 1)
+                    } else {
+                      out <- data.frame(size = unique(sample(1:20, size = len, replace = TRUE)))
+                    }
+                    out
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     theDots <- list(...)
                     theDots <- theDots[!(names(theDots) %in% c("size", "linOut"))]                   
@@ -20,7 +26,7 @@ modelInfo <- list(label = "Multi-Layer Perceptron",
                                  size = param$size,
                                  linOut = lin)
                     args <- c(args, theDots)
-                    do.call("mlp", args)
+                    do.call(RSNNS::mlp, args)
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     out <- predict(modelFit, newdata)
@@ -35,5 +41,6 @@ modelInfo <- list(label = "Multi-Layer Perceptron",
                     colnames(out) <- modelFit$obsLevels
                     out
                   },
+                  levels = function(x) x$obsLevels,
                   tags = c("Neural Network"),
                   sort = function(x) x[order(x$size),])

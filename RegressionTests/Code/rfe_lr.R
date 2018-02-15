@@ -1,5 +1,8 @@
+timestamp <- Sys.time()
 library(caret)
-timestamp <- format(Sys.time(), "%Y_%m_%d_%H_%M")
+library(plyr)
+library(recipes)
+library(dplyr)
 
 model <- "rfe_lr"
 
@@ -46,17 +49,19 @@ test_loo_model_form_class <- rfe(Class ~ ., data = training_class,
 
 test_cv_pred_class <- predict(test_cv_model_class, testX_class)
 test_loo_pred_class <- predict(test_loo_model_class, testX_class)
-test_cv_pred_form_class <- predict(test_cv_model_form_class, testing_class[, colnames(testing_class) != "Class"])
-test_loo_pred_form_class <- predict(test_loo_model_form_class, testing_class[, colnames(testing_class) != "Class"])
+# test_cv_pred_form_class <- predict(test_cv_model_form_class, testing_class[, colnames(testing_class) != "Class"])
+# test_loo_pred_form_class <- predict(test_loo_model_form_class, testing_class[, colnames(testing_class) != "Class"])
 
 #########################################################################
 
 tests <- grep("test_", ls(), fixed = TRUE, value = TRUE)
 
 sInfo <- sessionInfo()
+timestamp_end <- Sys.time()
 
-save(list = c(tests, "sInfo", "timestamp"),
+save(list = c(tests, "sInfo", "timestamp", "timestamp_end"),
      file = file.path(getwd(), paste(model, ".RData", sep = "")))
 
-q("no")
+if(!interactive())
+   q("no")
 

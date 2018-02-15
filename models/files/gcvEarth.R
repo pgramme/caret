@@ -4,21 +4,25 @@ modelInfo <- list(label = "Multivariate Adaptive Regression Splines",
                   parameters = data.frame(parameter = c('degree'),
                                           class = c("numeric"),
                                           label = c('Product Degree')),
-                  grid = function(x, y, len = NULL) {
+                  grid = function(x, y, len = NULL, search = "grid") {
                     data.frame(degree = 1)
                   },
                   loop = NULL,
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
+                  	require(earth)
                     theDots <- list(...)
                     theDots$keepxy <- TRUE 
+                    
+                    ## pass in any model weights
+                    if(!is.null(wts)) theDots$weights <- wts
                     
                     modelArgs <- c(list(x = x, y = y,
                                         degree = param$degree),
                                    theDots)
                     if(is.factor(y)) modelArgs$glm <- list(family=binomial)
-                    
-                    tmp <- do.call("earth", modelArgs)
-                    
+
+                    tmp <- do.call(earth::earth, modelArgs)
+
                     tmp$call["degree"] <-  param$degree
                     tmp 
                     },
@@ -32,10 +36,14 @@ modelInfo <- list(label = "Multivariate Adaptive Regression Splines",
                     as.vector(out)            
                   },
                   prob = function(modelFit, newdata, submodels = NULL) {
-                    out <- predict(modelFit, newdata, type= "response")
-                    out <- cbind(1-out, out)
-                    colnames(out) <-  modelFit$obsLevels
-                    out
+                    out <- earth:::predict.earth(modelFit, newdata, type= "response")
+                    if (ncol(out) > 1) {
+                      out <- t(apply(out, 1, function(x) x / sum(x)))
+                    } else {
+                      out <- cbind(1 - out[, 1], out[, 1])
+                      colnames(out) <- modelFit$obsLevels
+                    }
+                    as.data.frame(out)
                   },
                   predictors = function(x, ...) {
                     vi <- varImp(x)
@@ -43,7 +51,7 @@ modelInfo <- list(label = "Multivariate Adaptive Regression Splines",
                     if(length(notZero) > 0) rownames(vi)[notZero] else NULL
                   },
                   varImp = function(object, value = "gcv", ...) {
-                    earthImp <- evimp(object)
+                    earthImp <- earth::evimp(object)
                     if(!is.matrix(earthImp)) earthImp <- t(as.matrix(earthImp))
                     
                     # get other variable names and padd with zeros
@@ -77,5 +85,10 @@ modelInfo <- list(label = "Multivariate Adaptive Regression Splines",
                     out
                   },
                   levels = function(x) x$levels,
-                  tags = c("Multivariate Adaptive Regression Splines", "Implicit Feature Selection"),
+                  tags = c("Multivariate Adaptive Regression Splines", "Implicit Feature Selection", 
+                           "Accepts Case Weights"),
+                  notes = paste(
+                    "Unlike other packages used by `train`, the `earth`",
+                    "package is fully loaded when this model is used."
+                  ),                  
                   sort = function(x) x[order(x$degree),])

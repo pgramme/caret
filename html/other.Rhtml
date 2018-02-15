@@ -32,7 +32,7 @@ session <- paste(format(Sys.time(), "%a %b %d %Y"),
     <meta name="keywords" content="" />
     <meta name="description" content="" />
     <meta http-equiv="content-type" content="text/html; charset=utf-8" />
-    <title>Other Functions</title>
+    <title>Measuring Model Performance</title>
     <link href='http://fonts.googleapis.com/css?family=Abel' rel='stylesheet' type='text/css'>
     <link href="style.css" rel="stylesheet" type="text/css" media="screen" />
   </head>
@@ -41,7 +41,7 @@ session <- paste(format(Sys.time(), "%a %b %d %Y"),
       <div id="header-wrapper" class="container">
   <div id="header" class="container">
 	  <div id="logo">
-	    <h1><a href="#">Other Functions</a></h1>
+	    <h1><a href="#">Measuring Model Performance</a></h1>
 	  </div>
           <!--
 	      <div id="menu">
@@ -65,7 +65,6 @@ session <- paste(format(Sys.time(), "%a %b %d %Y"),
 <ul>
   <li><a href="#test">Evaluating Test Sets</a></li> 
   <li><a href="#lift">Evaluating Class Probabilities</a></li>
-  <li><a href="#affy">Processing Affy Arrays</a></li> 
  </ul>   
       
 <div id="test"></div>   
@@ -143,7 +142,43 @@ confusionMatrix(gbmFit3)
 These values are the percentages that hold-out samples landed in the
 confusion matrix during resampling. There are several methods for
 normalizing these values. See <code>?confusionMatrix.train</code> for details.
-</p>	
+</p>  
+
+
+
+<p>
+For multi-class problems, there are additional functions that can be used to calculate performance. One, <span class="mx funCall"> mnLogLoss </span> computes the negative of the multinomial log-likelihood (smaller is better) based on the class probabilities. This can be used to optimize tuning parameters but can lead to results that are inconsistent with other measures (e.g. accuracy or the area under the ROC curve), especially when the other measures are near their best possible values. The function has similar arguments to the other functions described above:
+</p>
+
+<!--begin.rcode other_logLoss
+test_results <- predict(gbmFit3, testing, type = "prob")
+test_results$obs <- testing$Class
+head(test_results)
+mnLogLoss(test_results, lev = levels(test_results$obs))
+end.rcode--> 
+
+<p>
+Additionally, the function <span class="mx funCall"> multiClassSummary </span> computes a number of relevant metrics:
+</p>
+<ul>
+  <li>the overall accuracy and Kappa statistics using the predicted classes</li>
+  <li>the negative multinomial log loss (if class probabilities are available)</li>
+  <li>averages of the “one versus all” statistics such as sensitivity, specificity, the area under the ROC curve, etc. 
+</li>
+</ul>
+
+<p>
+For example:
+</p>
+
+<!--begin.rcode other_multiclass
+test_results$pred <- predict(gbmFit3, testing)
+multiClassSummary(test_results, lev = levels(test_results$obs))
+end.rcode--> 
+
+
+
+
 	
 <div id="lift"></div>    
 <h1>Evaluating Class Probabilities</h1>
@@ -223,62 +258,46 @@ plot(calData, type = "l", auto.key = list(columns = 3,
                                           lines = TRUE,
                                           points = FALSE))
     end.rcode--> 
-    
-<div id="affy"></div>      
-<h1>Processing Affy Arrays</h1>
-<p>
-For Affymetrix gene chip data, RMA processing (<a href="http://nar.oxfordjournals.org/cgi/content/abstract/31/4/e150">Irizarry, 2003</a>) is a popular method of processing gene expression data. However, for predictive modeling, it has a drawback in that the processing is batch oriented; if an additional sample is collected, the RMA processing must be repeated using all the samples. This is mainly because of two steps in the processing: the quantile normalization process and the calculation of expression. Quantile normalization normalizes the data such that the between--chip distributions have equivalent quantiles and is very effective in improving the quality of the data. It is possible to let the samples in the training set define the reference distribution for normalization. For the expression calculation, a robust method such as a trimmed mean can be used to summarize the probe level data into a single summary metric per sample.
-          </p>
-          <p>For example:</p>
-<!--begin.rcode eval=FALSE          
-# first, let affy/expresso know that the method exists
-normalize.AffyBatch.methods <- c(normalize.AffyBatch.methods, "normalize2Reference")
-
-RawData <- ReadAffy(celfile.path=FilePath)
-
-Batch1Step1 <- bg.correct(RawData, "rma")
-Batch1Step2 <- normalize.AffyBatch.quantiles(Batch1Step1)
-referencePM <- pm(Batch1Step2)[,1]
-Batch1Step3 <- computeExprSet(Batch1Step2, "pmonly", "trimMean") 
-
-Batch2Step1 <- bg.correct(RawData2, "rma")
-Batch2Step2 <- normalize.AffyBatch.normalize2Reference(Batch2Step1, ref = referencePM)
-Batch2Step3 <- computeExprSet(Batch2Step2, "pmonly", "trimMean")
-    end.rcode--> 
-    
+  
 	  <div style="clear: both;">&nbsp;</div>
 	</div>
 	<!-- end #content -->
-	<div id="sidebar">
-	  <ul>
-	    <li>
-	      <h2>Links</h2>
-	      <p><a href="modelList.html"><tt>train</tt> Model List</a></p>
-	    </li>
-	    <li>
-	      <h2>Topics</h2>
-	      <ul>
-      	<li><a href="index.html">Main Page</a></li>
-  		<li><a href="datasets.html">Data Sets</a></li>
-                <li><a href="visualizations.html">Visualizations</a></li>
-                <li><a href="preprocess.html">Pre-Processing</a></li>
-                <li><a href="splitting.html">Data Splitting</a></li>
-                <li><a href="misc.html">Miscellaneous Model Functions</a></li>
-                <li><a href="training.html">Model Training and Tuning</a></li>
-                <li><a href="modelList.html"><tt>train</tt> Model List</a></li>
-                <li><a href="bytag.html"><tt>train</tt> Models By Tag</a></li>
-                 <li><a href="similarity.html"><tt>train</tt> Models By Similarity</a></li>
-                <li><a href="custom_models.html">Using Custom Models</a></li>
-                <li><a href="varimp.html">Variable Importance</a></li>
-                <li><a href="featureselection.html">Feature Selection</a></li>
-                <li><a href="other.html">Other Functions</a></li>
-                <li><a href="parallel.html">Parallel Processing</a></li>
-                <li><a href="adaptive.html">Adaptive Resampling</a></li> 
-	      </ul>
-	    </li>
-	  </ul>
-	</div>
-	<!-- end #sidebar -->
+<div id="sidebar">
+<ul>
+  <li>
+    <h2>General Topics</h2>
+    <ul>
+      <li><a href="index.html">Front Page</a></li>
+      <li><a href="visualizations.html">Visualizations</a></li>
+      <li><a href="preprocess.html">Pre-Processing</a><li>
+      <li><a href="splitting.html">Data Splitting</a></li>
+      <li><a href="varimp.html">Variable Importance</a></li>
+      <li><a href="other.html">Model Performance</a></li>
+      <li><a href="parallel.html">Parallel Processing</a></li>
+    </ul>
+    <h2>Model Training and Tuning</h2>
+    <ul>
+      <li><a href="training.html">Basic Syntax</a></li>
+      <li><a href="modelList.html">Sortable Model List</a></li>
+      <li><a href="bytag.html">Models By Tag</a></li>
+      <li><a href="similarity.html">Models By Similarity</a></li>
+      <li><a href="custom_models.html">Using Custom Models</a></li>
+      <li><a href="sampling.html">Sampling for Class Imbalances</a></li> 
+      <li><a href="random.html">Random Search</a></li> 
+      <li><a href="adaptive.html">Adaptive Resampling</a></li> 
+    </ul>
+    <h2>Feature Selection</h2>
+    <ul>
+      <li><a href="featureselection.html">Overview</a>
+      <li><a href="rfe.html">RFE</a></li>
+      <li><a href="filters.html">Filters</a></li>
+      <li><a href="GA.html">GA</a></li>
+      <li><a href="SA.html">SA</a></li>
+    </ul>  
+  </li>
+</ul>
+</div>
+<!-- end #sidebar -->
 	<div style="clear: both;">&nbsp;</div>
       </div>
       <div class="container"><img src="images/img03.png" width="1000" height="40" alt="" /></div>

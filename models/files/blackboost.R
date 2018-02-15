@@ -4,10 +4,18 @@ modelInfo <- list(label = "Boosted Tree",
                   parameters = data.frame(parameter = c('mstop', 'maxdepth'),
                                           class = c("numeric", "numeric"),
                                           label = c('#Trees', 'Max Tree Depth')),
-                  grid = function(x, y, len = NULL) expand.grid(maxdepth  = seq(1, len),
-                                                                mstop = floor((1:len) * 50)),
-                  loop = function(grid) {     
-                    loop <- ddply(grid, .(maxdepth), function(x) c(mstop = max(x$mstop)))
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- expand.grid(maxdepth  = seq(1, len),
+                                         mstop = floor((1:len) * 50))
+                    } else {
+                      out <- data.frame(mstop = sample(1:1000, replace = TRUE, size = len),
+                                        maxdepth = sample(1:10, replace = TRUE, size = len))
+                    }
+                    out
+                  },
+                  loop = function(grid) {
+                    loop <- plyr::ddply(grid, plyr::`.`(maxdepth), function(x) c(mstop = max(x$mstop)))
                     submodels <- vector(mode = "list", length = nrow(loop))
                     for(i in seq(along = loop$mstop))  {
                       index <- which(grid$maxdepth == loop$maxdepth[i])
@@ -19,24 +27,30 @@ modelInfo <- list(label = "Boosted Tree",
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
                     theDots <- list(...)
                     
+                    if(length(levels(y)) > 2) 
+                      stop("Two-class outcomes only. See ?mboost::Multinomial",
+                           call. = FALSE)
+                    
                     if(any(names(theDots) == "tree_controls")) {
                       theDots$tree_controls$maxdepth <- param$maxdepth 
                       treeCtl <- theDots$tree_controls
                       theDots$tree_controls <- NULL
-                      
-                    } else treeCtl <- ctree_control(maxdepth = param$maxdepth)
-                    
+
+                    } else treeCtl <- party::ctree_control(maxdepth = param$maxdepth)
+
                     if(any(names(theDots) == "control")) {
                       theDots$control$mstop <- param$mstop 
                       ctl <- theDots$control
                       theDots$control <- NULL
-                      
-                    } else ctl <- boost_control(mstop = param$mstop)        
-                    
+
+                    } else ctl <- mboost::boost_control(mstop = param$mstop)
+
                     if(!any(names(theDots) == "family")) {
-                      theDots$family <- if(is.factor(y)) Binomial() else GaussReg()              
-                    }  
-                    
+                      if(is.factor(y)) {
+                        theDots$family <- if(length(lev) == 2) mboost::Binomial() else mboost::Multinomial()
+                        } else theDots$family <- mboost::GaussReg()
+                    }
+
                     ## pass in any model weights
                     if(!is.null(wts)) theDots$weights <- wts
                     
@@ -46,16 +60,16 @@ modelInfo <- list(label = "Boosted Tree",
                                         tree_controls = treeCtl),
                                    theDots)  
                     modelArgs$data$.outcome <- y
-                    
-                    out <- do.call("blackboost", modelArgs)
-                    out$call["data"] <- "data"  
+
+                    out <- do.call(mboost::blackboost, modelArgs)
+                    out$call["data"] <- "data"
                     out
-                    },
+                  },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     predType <- ifelse(modelFit$problemType == "Classification", "class", "response")
                     if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
                     out <- predict(modelFit, newdata, type = predType)
-                                        
+                    
                     if(!is.null(submodels)) {
                       tmp <- vector(mode = "list", length = nrow(submodels) + 1)
                       tmp[[1]] <- as.vector(out)
@@ -73,18 +87,16 @@ modelInfo <- list(label = "Boosted Tree",
                   },
                   prob = function(modelFit, newdata, submodels = NULL) {
                     if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
-                    lp <- predict(modelFit, newdata)
-                    out <- cbind(binomial()$linkinv(-lp),
-                                 1 - binomial()$linkinv(-lp))
+                    probs <- predict(modelFit, newdata, type = "response")
+                    out <- cbind(1 - probs, probs)
                     colnames(out) <- modelFit$obsLevels
                     if(!is.null(submodels)) {
                       tmp <- vector(mode = "list", length = nrow(submodels) + 1)
                       tmp[[1]] <- out
                       
                       for(j in seq(along = submodels$mstop)) {                           
-                        tmpProb <- predict(modelFit[submodels$mstop[j]], newdata)
-                        tmpProb <- cbind(binomial()$linkinv(-tmpProb),
-                                         1 - binomial()$linkinv(-tmpProb))
+                        tmpProb <- predict(modelFit[submodels$mstop[j]], newdata, type = "response")
+                        tmpProb <- cbind(1 - tmpProb, tmpProb)
                         colnames(tmpProb) <- modelFit$obsLevels
                         tmp[[j+1]] <- as.data.frame(tmpProb[, modelFit$obsLevels, drop = FALSE])           
                       }
@@ -96,5 +108,5 @@ modelInfo <- list(label = "Boosted Tree",
                     strsplit(variable.names(x), ", ")[[1]]
                   },
                   levels = function(x) levels(x$response),
-                  tags = c("Tree-Based Model", "Ensemble Model", "Boosting"),
+                  tags = c("Tree-Based Model", "Ensemble Model", "Boosting", "Accepts Case Weights"),
                   sort = function(x) x[order(x$mstop, x$maxdepth),])

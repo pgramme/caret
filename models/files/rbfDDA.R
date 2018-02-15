@@ -5,8 +5,15 @@ modelInfo <- list(label = "Radial Basis Function Network",
                   parameters = data.frame(parameter = c('negativeThreshold'),
                                           class = c('numeric'),
                                           label = c('Activation Limit for Conflicting Classes')),
-                  grid = function(x, y, len = NULL) 
-                    data.frame(negativeThreshold =  10 ^(-(1:len))),
+                  grid = function(x, y, len = NULL, search = "grid") 
+                  {
+                    if(search == "grid") {
+                      out <- data.frame(negativeThreshold =  10 ^(-(1:len)))
+                    } else {
+                      out <- data.frame(negativeThreshold = runif(len, min = 0, 3))
+                    }
+                    out
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     theDots <- list(...)
                     
@@ -25,7 +32,7 @@ modelInfo <- list(label = "Radial Basis Function Network",
                     args <- list(x = x,
                                  y = y)
                     args <- c(args, theDots)
-                    do.call("rbfDDA", args)
+                    do.call(RSNNS::rbfDDA, args)
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     out <- predict(modelFit, newdata)
@@ -40,5 +47,6 @@ modelInfo <- list(label = "Radial Basis Function Network",
                     colnames(out) <- modelFit$obsLevels
                     out
                   },
+                  levels = function(x) x$obsLevels,
                   tags = c("Neural Network","L2 Regularization", "Radial Basis Function"),
                   sort = function(x) x[order(-x$negativeThreshold),])

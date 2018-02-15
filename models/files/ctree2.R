@@ -2,11 +2,17 @@ modelInfo <- list(label = "Conditional Inference Tree",
                   library = "party",
                   loop = NULL,
                   type = c('Regression', 'Classification'),
-                  parameters = data.frame(parameter = c('maxdepth'),
-                                          class = c('numeric'),
-                                          label = c('Max Tree Depth')),
-                  grid = function(x, y, len = NULL) {
-                    data.frame(maxdepth = 1:len)
+                  parameters = data.frame(parameter = c('maxdepth', 'mincriterion'),
+                                          class = c('numeric', 'numeric'),
+                                          label = c('Max Tree Depth', '1 - P-Value Threshold')),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- expand.grid(maxdepth = 1:len, mincriterion = seq(from = .99, to = 0.01, length = len))
+                    } else {
+                      out <- data.frame(maxdepth = sample(1:15, replace = TRUE, size = len),
+                                        mincriterion = runif(len, min = 0, max = 1))
+                    }
+                    out
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
@@ -15,13 +21,13 @@ modelInfo <- list(label = "Conditional Inference Tree",
                     if(any(names(theDots) == "controls"))
                     {
                       theDots$controls@tgctrl@maxdepth <- param$maxdepth
-                      theDots$controls@gtctrl@mincriterion <- 0
+                      theDots$controls@gtctrl@mincriterion <- param$mincriterion
                       ctl <- theDots$controls
                       theDots$controls <- NULL
                       
-                    } else ctl <- do.call(getFromNamespace("ctree_control", "party"), 
+                    } else ctl <- do.call(party::ctree_control, 
                                           list(maxdepth = param$maxdepth,
-                                               mincriterion = 0))
+                                               mincriterion = param$mincriterion))
                     ## pass in any model weights
                     if(!is.null(wts)) theDots$weights <- wts
                     modelArgs <- c(
@@ -30,7 +36,7 @@ modelInfo <- list(label = "Conditional Inference Tree",
                                         data = dat,
                                         controls = ctl),
                                    theDots)
-                    out <- do.call(getFromNamespace("ctree", "party"), modelArgs)
+                    out <- do.call(party::ctree, modelArgs)
                     out
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
@@ -63,6 +69,6 @@ modelInfo <- list(label = "Conditional Inference Tree",
                     }
                     unique(vars)
                   },
-                  tags = c('Tree-Based Model', "Implicit Feature Selection"),
+                  tags = c('Tree-Based Model', "Implicit Feature Selection", "Accepts Case Weights"),
                   levels = function(x) levels(x@data@get("response")[,1]),
                   sort = function(x) x[order(x[,1]),])

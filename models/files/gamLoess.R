@@ -5,29 +5,42 @@ modelInfo <- list(label = "Generalized Additive Model using LOESS",
                   parameters = data.frame(parameter = c('span', 'degree'),
                                           class = c('numeric', 'numeric'),
                                           label = c('Span', 'Degree')),
-                  grid = function(x, y, len = NULL) 
-                    expand.grid(span = .5, degree = 1),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <- expand.grid(span = .5, degree = 1)
+                    } else {
+                      out <- data.frame(span = runif(len, min = 0, max = 1),
+                                        degree = sample(1:2, size = len, replace = TRUE))
+                    }
+                    out
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
-                    dat <- if(is.data.frame(x)) x else as.data.frame(x)
-                    dat$.outcome <- y
+                    require(gam)
+                    args <- list(data = if(is.data.frame(x)) x else as.data.frame(x))
+                    args$data$.outcome <- y
+                    args$formula <- caret:::smootherFormula(x,
+                                                            smoother = "lo",
+                                                            span = param$span,
+                                                            degree = param$degree)
+                    theDots <- list(...)
                     
-                    gam:::gam(caret:::smootherFormula(x,
-                                              smoother = "lo",
-                                              span = param$span,
-                                              degree = param$degree),
-                              data = dat,
-                              family =  if(is.factor(y)) binomial() else  gaussian(),
-                              ...)
+                    
+                    if(!any(names(theDots) == "family")) 
+                      args$family <- if(is.factor(y)) binomial else gaussian
+                    
+                    if(length(theDots) > 0) args <- c(args, theDots)
+
+                    do.call(gam::gam, args)
                   },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
                     if(modelFit$problemType == "Classification") {
-                      probs <-  gam:::predict.gam(modelFit, newdata, type = "response")
+                      probs <-  gam:::predict.Gam(modelFit, newdata, type = "response")
                       out <- ifelse(probs < .5,
                                     modelFit$obsLevel[1],
                                     modelFit$obsLevel[2])
                     } else {
-                      out <- gam:::predict.gam(modelFit, newdata, type = "response")
+                      out <- gam:::predict.Gam(modelFit, newdata, type = "response")
                     }
                     out
                   },
@@ -54,7 +67,7 @@ modelInfo <- list(label = "Generalized Additive Model using LOESS",
                       x <- lapply(x, function(x) x[!(x %in% c("s", "lo", ""))])
                       unlist(lapply(x, function(x) x[1]))
                     }
-                    gamSummary <- gam:::summary.gam(object)
+                    gamSummary <- gam:::summary.Gam(object)
                     smoothed <- gamSummary$anova
                     smoothed <- smoothed[complete.cases(smoothed), grepl("^P", colnames(smoothed)), drop = FALSE] 
                     linear <- gamSummary$parametric.anova
@@ -76,5 +89,26 @@ modelInfo <- list(label = "Generalized Additive Model using LOESS",
                     }
                     gams
                   },
+                  levels = function(x) x$obsLevels,
+                  notes = 
+                    paste(
+                      'Which terms enter the model in a nonlinear manner is determined',
+                      'by the number of unique values for the predictor. For example,',
+                      'if a predictor only has four unique values, most basis expansion',
+                      'method will fail because there are not enough granularity in the',
+                      'data. By default, a predictor must have at least 10 unique',
+                      'values to be used in a nonlinear basis expansion.',
+                      'Unlike other packages used by `train`, the `gam`',
+                      'package is fully loaded when this model is used.'
+                    ),
                   tags = c("Generalized Linear Model", "Generalized Additive Model"),
-                  sort = function(x) x)
+                  sort = function(x) x,
+                  check = function(pkg) {
+                    requireNamespace("gam")
+                    current <- packageDescription("gam")$Version
+                    expected <- "1.15"
+                    if(compareVersion(current, expected) < 0)
+                      stop("This modeling workflow requires kohonen version ",
+                           expected, "or greater.", call. = FALSE)
+                  }
+                  )

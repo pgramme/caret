@@ -4,32 +4,19 @@ modelInfo <- list(label = "Random k-Nearest Neighbors",
                   parameters = data.frame(parameter = c("k", "mtry"),
                                           class = rep("numeric", 2),
                                           label = c("#Neighbors", "#Randomly Selected Predictors")),
-                  grid = function(x, y, len = NULL) {
-                    p <- ncol(x)
-                    if(len == 1) {  
-                      tuneSeq <- if(!is.factor(y)) max(floor(p/3), 1) else floor(sqrt(p))
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- expand.grid(mtry = caret::var_seq(p = ncol(x), 
+                                                               classification = is.factor(y), 
+                                                               len = len),
+                                         k = (5:((2 * len)+4))[(5:((2 * len)+4))%%2 > 0])
                     } else {
-                      if(p <= len)
-                      { 
-                        tuneSeq <- floor(seq(2, to = p, length = p))
-                      } else {
-                        if(p < 500 ) tuneSeq <- floor(seq(2, to = p, length = len))
-                        else tuneSeq <- floor(2^seq(1, to = log(p, base = 2), length = len))
-                      }
+                      by_val <- if(is.factor(y)) length(levels(y)) else 1
+                      out <- data.frame(mtry = sample(1:ncol(x), size = len, replace = TRUE),
+                                        k = sample(seq(1, floor(nrow(x)/3), by = by_val), size = len, replace = TRUE))
                     }
-                    if(any(table(tuneSeq) > 1))
-                    {
-                      tuneSeq <- unique(tuneSeq)
-                      cat(
-                        "note: only",
-                        length(tuneSeq),
-                        "unique complexity parameters in default grid.",
-                        "Truncating the grid to",
-                        length(tuneSeq), ".\n\n")      
-                    }
-                    expand.grid(mtry = tuneSeq,
-                                k = (5:((2 * len)+4))[(5:((2 * len)+4))%%2 > 0])
-                  },
+                    out
+                  }, 
                   loop = NULL,
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     out <- list(data = x, y = y, mtry = param$mtry, k = param$k)
@@ -44,16 +31,17 @@ modelInfo <- list(label = "Random k-Nearest Neighbors",
                     modelFit$obsLevels <- NULL
                     modelFit$newdata <- newdata
                     if(!is.factor(modelFit$y)) {
-                      out <- do.call("rknnReg", modelFit)$pred
+                      out <- do.call(rknn::rknnReg, modelFit)$pred
                     } else {
-                      out <- as.character(do.call("rknn", modelFit)$pred)
-                    } 
+                      out <- as.character(do.call(rknn::rknn, modelFit)$pred)
+                    }
                     out
                   },
+                  levels = function(x) x$obsLevels,
                   prob = NULL,
                   predictors = function(x, s = NULL, ...) {
                     modelFit$xNames
                   },
-                  tags = "Prototype Models",
+                  tags = c("Prototype Models", "Two Class Only"),
                   prob = NULL,
                   sort = function(x) x[order(x[,1]),])

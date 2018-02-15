@@ -5,24 +5,32 @@ modelInfo <- list(label = "Neural Network",
                   parameters = data.frame(parameter = c('size', 'decay'),
                                           class = rep("numeric", 2),
                                           label = c('#Hidden Units', 'Weight Decay')),
-                  grid = function(x, y, len = NULL) expand.grid(size = ((1:len) * 2) - 1, 
-                                                                decay = c(0, 10 ^ seq(-1, -4, length = len - 1))),
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- expand.grid(size = ((1:len) * 2) - 1, 
+                                         decay = c(0, 10 ^ seq(-1, -4, length = len - 1)))
+                    } else {
+                      out <- data.frame(size = sample(1:20, size = len, replace = TRUE), 
+                                        decay = 10^runif(len, min = -5, 1))
+                    }
+                    out
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
                     dat$.outcome <- y
                     if(!is.null(wts))
                     {
-                      out <- nnet(.outcome ~ .,
-                                  data = dat,
-                                  weights = wts,                                       
-                                  size = param$size,
-                                  decay = param$decay,
-                                  ...)
-                    } else out <- nnet(.outcome ~ .,
-                                       data = dat,
-                                       size = param$size,
-                                       decay = param$decay,
-                                       ...)
+                      out <- nnet::nnet(.outcome ~ .,
+                                        data = dat,
+                                        weights = wts,
+                                        size = param$size,
+                                        decay = param$decay,
+                                        ...)
+                    } else out <- nnet::nnet(.outcome ~ .,
+                                             data = dat,
+                                             size = param$size,
+                                             decay = param$decay,
+                                             ...)
                     out
                   },
                   predict = function(modelFit, newdata, submodels = NULL)
@@ -57,6 +65,6 @@ modelInfo <- list(label = "Neural Network",
                     imp
                   },
                   predictors = function(x, ...) if(hasTerms(x)) predictors(x$terms) else NA,
-                  tags = c("Neural Network", "L2 Regularization"),
+                  tags = c("Neural Network", "L2 Regularization", "Accepts Case Weights"),
                   levels = function(x) x$lev,
                   sort = function(x) x[order(x$size, -x$decay),])

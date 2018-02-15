@@ -4,16 +4,22 @@ modelInfo <- list(label = "Least Angle Regression",
                   parameters = data.frame(parameter = 'fraction',
                                           class = "numeric",
                                           label = 'Fraction'),
-                  grid = function(x, y, len = NULL)
-                    expand.grid(fraction = seq(0.05, 1, length = len)),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    if(search == "grid") {
+                      out <-  expand.grid(fraction = seq(0.05, 1, length = len))
+                    } else {
+                      out <- data.frame(fraction = runif(len, min = 0, max = 1))
+                    }
+                    out
+                  },
                   loop = function(grid) {   
                     grid <- grid[order(grid$fraction, decreasing = TRUE),, drop = FALSE]
                     loop <- grid[1,,drop = FALSE]
                     submodels <- list(grid[-1,,drop = FALSE])     
                     list(loop = loop, submodels = submodels)
                   },
-                  fit = function(x, y, wts, param, lev, last, classProbs, ...) 
-                    lars(as.matrix(x), y, ...),
+                  fit = function(x, y, wts, param, lev, last, classProbs, ...)
+                    lars::lars(as.matrix(x), y, ...),
                   predict = function(modelFit, newdata, submodels = NULL) {
                     out <- predict(modelFit,
                                    as.matrix(newdata),

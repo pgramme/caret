@@ -1,30 +1,27 @@
+timestamp <- Sys.time()
 library(caret)
-timestamp <- format(Sys.time(), "%Y_%m_%d_%H_%M")
+library(plyr)
+library(recipes)
+library(dplyr)
 
 model <- "rfe_gam"
 
 #########################################################################
 
-SLC14_1 <- function(n = 100) {
-  dat <- matrix(rnorm(n*20, sd = 3), ncol = 20)
-  foo <- function(x) x[1] + sin(x[2]) + log(abs(x[3])) + x[4]^2 + x[5]*x[6] + 
-    ifelse(x[7]*x[8]*x[9] < 0, 1, 0) +
-    ifelse(x[10] > 0, 1, 0) + x[11]*ifelse(x[11] > 0, 1, 0) + 
-    sqrt(abs(x[12])) + cos(x[13]) + 2*x[14] + abs(x[15]) + 
-    ifelse(x[16] < -1, 1, 0) + x[17]*ifelse(x[17] < -1, 1, 0) -
-    2 * x[18] - x[19]*x[20]
-  dat <- as.data.frame(dat)
-  colnames(dat) <- paste0("Var", 1:ncol(dat))
-  dat$y <- apply(dat[, 1:20], 1, foo) + rnorm(n, sd = 3)
-  dat
-}
-
+library(caret)
+library(plyr)
+library(recipes)
+library(dplyr)
 set.seed(2)
 training <- SLC14_1(275)
 testing <- SLC14_1(500)
 
 trainX <- training[, -ncol(training)]
 trainY <- training$y
+
+rec_reg <- recipe(y ~ ., data = training) %>%
+  step_center(all_predictors()) %>%
+  step_scale(all_predictors()) 
 testX <- trainX[, -ncol(training)]
 testY <- trainX$y 
 
@@ -38,23 +35,23 @@ rctrl2 <- rfeControl(method = "LOOCV", functions = gamFuncs)
 
 set.seed(849)
 test_cv_model <- rfe(x = trainX, y = trainY,
-                     sizes = c(1, 5, 10, 15),
+                     sizes = 1:3,
                      rfeControl = rctrl1)
 
 set.seed(849)
 test_loo_model <- rfe(x = trainX, y = trainY,
-                      sizes = c(1, 5, 10, 15),
+                      sizes = 1:3,
                       rfeControl = rctrl2)
 
 set.seed(849)
 test_cv_model_form <- rfe(y ~ ., data = training,
-                          sizes = c(1, 5, 10, 15),
+                          sizes = 1:3,
                           rfeControl = rctrl1)
 
-set.seed(849)
-test_loo_model_form <- rfe(y ~ ., data = training,
-                           sizes = c(1, 5, 10, 15),
-                           rfeControl = rctrl2)
+# set.seed(849)
+# test_loo_model_form <- rfe(y ~ ., data = training,
+#                            sizes = 1:3,
+#                            rfeControl = rctrl2)
 
 #########################################################################
 
@@ -76,6 +73,7 @@ testY_class <- testing_class$Class
 
 training_class$fact <- factor(sample(letters[1:3], size = nrow(training_class), replace = TRUE))
 testing_class$fact <- factor(sample(letters[1:3], size = nrow(testing_class), replace = TRUE))
+testX_class$fact <- testing_class$fact
 
 #########################################################################
 
@@ -84,40 +82,40 @@ cctrl2 <- rfeControl(method = "LOOCV", functions = gamFuncs)
 
 set.seed(849)
 test_cv_model_class <- rfe(x = trainX_class, y = trainY_class,
-                           sizes = c(1, 5, 10, 15),
+                           sizes = 1:3,
                            rfeControl = cctrl1)
 
 set.seed(849)
 test_loo_model_class <- rfe(x = trainX_class, y = trainY_class,
-                            sizes = c(1, 5, 10, 15),
+                            sizes = 1:3,
                             rfeControl = cctrl2)
 
 set.seed(849)
 test_cv_model_form_class <- rfe(Class ~ ., data = training_class,
-                                sizes = c(1, 5, 10, 15),
+                                sizes = 1:3,
                                 rfeControl = cctrl1)
 
-set.seed(849)
-test_loo_model_form_class <- rfe(Class ~ ., data = training_class,
-                                 sizes = c(1, 5, 10, 15),
-                                 rfeControl = cctrl2)
+# set.seed(849)
+# test_loo_model_form_class <- rfe(Class ~ ., data = training_class,
+#                                  sizes = c(1, 5, 10, 15),
+#                                  rfeControl = cctrl2)
 
 #########################################################################
 
 test_cv_pred_class <- predict(test_cv_model_class, testX_class)
 test_loo_pred_class <- predict(test_loo_model_class, testX_class)
 test_cv_pred_form_class <- predict(test_cv_model_form_class, testX_class)
-test_loo_pred_form_class <- predict(test_loo_model_form_class, testX_class)
-
 
 #########################################################################
 
 tests <- grep("test_", ls(), fixed = TRUE, value = TRUE)
 
 sInfo <- sessionInfo()
+timestamp_end <- Sys.time()
 
-save(list = c(tests, "sInfo", "timestamp"),
+save(list = c(tests, "sInfo", "timestamp", "timestamp_end"),
      file = file.path(getwd(), paste(model, ".RData", sep = "")))
 
-q("no")
+if(!interactive())
+   q("no")
 

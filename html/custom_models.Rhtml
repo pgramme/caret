@@ -1,45 +1,49 @@
 <!--begin.rcode custom_load, results='hide', echo=FALSE, message=FALSE
-    library(caret)
-    library(kernlab)
-    library(class)
-    library(caTools)
-    library(pROC)
-    library(DMwR)
-    library(randomForest)
-    library(reshape2)
-    library(plyr)
-    library(pls)
-    theme1 <- caretTheme()
-    theme1$superpose.symbol$col = c(rgb(1, 0, 0, .4), rgb(0, 0, 1, .4), 
-      rgb(0.3984375, 0.7578125,0.6445312, .6))
-    theme1$superpose.symbol$pch = c(15, 16, 17)
-    theme1$superpose.cex = .8
-    theme1$superpose.line$col = c(rgb(1, 0, 0, .9), rgb(0, 0, 1, .9), rgb(0.3984375, 0.7578125,0.6445312, .6))
-    theme1$superpose.line$lwd <- 2
-    theme1$superpose.line$lty = 1:3
-    theme1$plot.symbol$col = c(rgb(.2, .2, .2, .4))
-    theme1$plot.symbol$pch = 16
-    theme1$plot.cex = .8
-    theme1$plot.line$col = c(rgb(1, 0, 0, .7))
-    theme1$plot.line$lwd <- 2
-    theme1$plot.line$lty = 1
+library(caret)
+library(kernlab)
+library(class)
+library(caTools)
+library(pROC)
+library(DMwR)
+library(randomForest)
+library(reshape2)
+library(plyr)
+library(pls)
+library(parallel)
+library(doMC)
+registerDoMC(cores=detectCores()-1)
 
-    i <- 1
+theme1 <- caretTheme()
+theme1$superpose.symbol$col = c(rgb(1, 0, 0, .4), rgb(0, 0, 1, .4), 
+                                rgb(0.3984375, 0.7578125,0.6445312, .6))
+theme1$superpose.symbol$pch = c(15, 16, 17)
+theme1$superpose.cex = .8
+theme1$superpose.line$col = c(rgb(1, 0, 0, .9), rgb(0, 0, 1, .9), rgb(0.3984375, 0.7578125,0.6445312, .6))
+theme1$superpose.line$lwd <- 2
+theme1$superpose.line$lty = 1:3
+theme1$plot.symbol$col = c(rgb(.2, .2, .2, .4))
+theme1$plot.symbol$pch = 16
+theme1$plot.cex = .8
+theme1$plot.line$col = c(rgb(1, 0, 0, .7))
+theme1$plot.line$lwd <- 2
+theme1$plot.line$lty = 1
 
-    hook_inline = knit_hooks$get('inline')
-    knit_hooks$set(inline = function(x) {
-      if (is.character(x)) highr::hi_html(x) else hook_inline(x)
-      })
-    opts_chunk$set(comment=NA, digits = 4,warning=FALSE,message=FALSE)
+i <- 1
 
-    library(ellipse)
-    library(mlbench)
-    data(Sonar)
-    session <- paste(format(Sys.time(), "%a %b %d %Y"),
-                     "using caret version",
-                     packageDescription("caret")$Version,
-                     "and",
-                     R.Version()$version.string)
+hook_inline = knit_hooks$get('inline')
+knit_hooks$set(inline = function(x) {
+  if (is.character(x)) highr::hi_html(x) else hook_inline(x)
+  })
+opts_chunk$set(comment=NA, digits = 4,warning=FALSE,message=FALSE)
+
+library(ellipse)
+library(mlbench)
+data(Sonar)
+session <- paste(format(Sys.time(), "%a %b %d %Y"),
+                 "using caret version",
+                 packageDescription("caret")$Version,
+                 "and",
+                 R.Version()$version.string)
 #    options(digits=2)
     end.rcode-->
 
@@ -104,7 +108,7 @@ Released   : 20120902
   <a href="#Illustration2">Illustrative Example 2: Something More Complicated - LogitBoost</a>
   </li>
   <li>
-  <a href="#Illustration3">Illustrative Example 3: SMOTE During Resampling</a>  </li>
+  <a href="#Illustration3">Illustrative Example 3: Nonstandard Formulas</a>  </li>
   </li>
   <li>
   <a href="#Illustration4">Illustrative Example 4: PLS Feature Extraction Pre-Processing</a>      
@@ -202,6 +206,15 @@ There are some basic components of the list for custom models. A brief descripti
   <li>
   <span class="mx arg">varImp</span> is an <b>optional</b> function that calculates variable importance metrics for the model (if any).
   </li>    
+  <li>
+  <span class="mx arg">oob</span> is another <b>optional</b> function that calculates  out-of-bag performance estimates from the model object. Most models do not have this capability but some (e.g. random forests, bagged models) do. 
+  </li>    
+  <li>
+  <span class="mx arg">notes</span> is an <b>optional</b> character vector that can be used to document non-obvious aspects of the model. For example, there are two Bayesian lasso models (<a href="https://github.com/topepo/caret/blob/master/models/files/blasso.R"><tt>blasso</tt></a> and <a href="https://github.com/topepo/caret/blob/master/models/files/blassoAveraged.R"><tt>blassoAveraged</tt></a>) and this field is used to describe the differences between the two models. 
+  </li>    
+  <li>
+  <span class="mx arg">check</span> is an <b>optional</b> function that can be used to check the system/install to make sure that any atypical software requirements are available to the user. The input is <span class="mx arg">pkg</span>, which is the same character string given by the <span class="mx arg">library</span>. This function is run <i>after</i> the checking function to see if the packages specified in <span class="mx arg">library</span> are installed. As an example, the model <a href="https://github.com/topepo/caret/blob/master/models/files/pythonKnnReg.R"><tt>pythonKnnReg</tt></a> uses certain python libraries and the user should have python and these libraries installed. The <a href="https://github.com/topepo/caret/blob/master/models/files/pythonKnnReg.R">model file</a> demonstrates how to check for python libraries prior to running the R model. 
+  </li>      
  </ul> 
  
 <p>
@@ -247,19 +260,29 @@ Values of <span class="mx arg">type</span> can indicate numeric, character or lo
 
 <h2>The grid Element</h2>
 <p> 
-This should be a function that takes parameters: <span class="mx arg">x</span> and <span class="mx arg">y</span> (for the predictors and outcome data) as well as <span class="mx arg">len</span>. The latter is the value of <span class="mx arg">tuneLength</span> that is potentially passed in through <span class="mx funCall">train<span>. 
+This should be a function that takes parameters: <span class="mx arg">x</span> and <span class="mx arg">y</span> (for the predictors and outcome data), <span class="mx arg">len</span> (the number of values per tuning parameter)  as well as <span class="mx arg">search</span>. <span class="mx arg">len</span> is the value of <span class="mx arg">tuneLength</span> that is potentially passed in through <span class="mx funCall">train</span>. <span class="mx arg">search</span> can be either <tt><span class="hl str">&quot;grid&quot;</span></tt> or <tt><span class="hl str">&quot;random&quot;</span></tt>. This can be used to setup a grid for searching or random values for random search. 
 </p> 
 <p> 
 The output should be a data frame of tuning parameter combinations with a column for each parameter. The column names should be the parameter name (e.g. the values of <tt>prm$parameter</tt>). In our case, let's vary the cost parameter on the log 2 scale. For the sigma parameter, we can use the <tt>kernlab</tt> function <span class="mx funCall">sigest</span> to pre-estimate the value. Following <span class="mx funCall">ksvm</span> we take the average of the low and high estimates. Here is a function we could use:
 </p> 
 <!--begin.rcode custom_grid, tidy=FALSE
-svmGrid <- function(x, y, len = NULL) {
+svmGrid <- function(x, y, len = NULL, search = "grid") {
   library(kernlab)
   ## This produces low, middle and high values for sigma 
   ## (i.e. a vector with 3 elements). 
   sigmas <- sigest(as.matrix(x), na.action = na.omit, scaled = TRUE)  
-  expand.grid(sigma = mean(sigmas[-2]),
-              C = 2 ^((1:len) - 3))
+  ## To use grid search:
+  if(search == "grid") {
+    out <- expand.grid(sigma = mean(as.vector(sigmas[-2])),
+                       C = 2 ^((1:len) - 3))
+  } else {
+    ## For random search, define ranges for the parameters then
+    ## generate random values for them
+    rng <- extendrange(log(sigmas), f = .75)
+    out <- data.frame(sigma = exp(runif(len, min = rng[1], max = rng[2])),
+                      C = 2^runif(len, min = -5, max = 8))
+  }
+  out
 }
    end.rcode--> 
 <p> 
@@ -522,7 +545,7 @@ loop
 submodels
     end.rcode-->
 <p>
-For this case, <span class="mx funCall">train</span> first fits the <span class="mx arg">nIter</span><tt> = <!--rinline '50' --></tt> model. When the model is predicted, that code has a <span class="mx funCall">for</span> loop that iterates over the elements of <code>submodel[[1]]</code> to get the predictions for the other 4 models. 
+For this case, <span class="mx funCall">train</span> first fits the <span class="mx arg">nIter</span><tt> = <!--rinline '51' --></tt> model. When the model is predicted, that code has a <span class="mx funCall">for</span> loop that iterates over the elements of <code>submodel[[1]]</code> to get the predictions for the other 4 models. 
 </p>
 <p>
 In the end, predictions for all five models (for <span class="mx arg">nIter</span><tt> = <!--rinline 'seq(11, 51, by = 10)' --></tt>) with a single model fit. 
@@ -561,15 +584,13 @@ lbPred <- function(modelFit, newdata, preProc = NULL, submodels = NULL) {
   
   ## In this case, 'submodels' is a data frame with the other values of
   ## nIter. We loop over these to get the other predictions.
-  if(!is.null(submodels))
-    {
+  if(!is.null(submodels)) {
     ## Save _all_ the predictions in a list
     tmp <- out
     out <- vector(mode = "list", length = nrow(submodels) + 1)
     out[[1]] <- tmp
     
-    for(j in seq(along = submodels$nIter))
-      {
+    for(j in seq(along = submodels$nIter)) {
       out[[j+1]] <- caTools::predict.LogitBoost(modelFit,
                                                 newdata,
                                                 nIter = submodels$nIter[j])
@@ -612,8 +633,12 @@ lbFuncs <- list(library = "caTools",
                 parameters = data.frame(parameter = 'nIter',
                                         class = 'numeric',
                                         label = '# Boosting Iterations'),
-                grid = function(x, y, len = NULL) 
-                  data.frame(nIter = 1 + ((1:len)*10)),
+                grid = function(x, y, len = NULL, search = "grid") {
+                  out <- if(search == "grid") 
+                    data.frame(nIter = 1 + ((1:len)*10)) else 
+                    data.frame(nIter = sample(1:500, size = len))
+                  out
+                },
                 fit = function(x, y, wts, param, lev, last, weights, classProbs, ...) {
                   LogitBoost(as.matrix(x), y, nIter = param$nIter)
                 },
@@ -638,6 +663,10 @@ lbFuncs <- list(library = "caTools",
 
 <p>Should you care about this? Let's tune the model over the same data set used for the SVM model above and see how long it takes:
 </p>
+
+<!--begin.rcode custom_reset_workers1, echo=FALSE, results = 'hide'
+registerDoSEQ()
+ end.rcode-->   
 <!--begin.rcode custom_lb_mod, tidy=FALSE
 set.seed(825)
 lb1 <- system.time(train(Class ~ ., data = training, 
@@ -690,65 +719,82 @@ xyplot(SpeedUp ~ nIter,
        ylab = "Speed-Up",
        type = c("p", "g", "r"))
 end.rcode--> 
-
+<!--begin.rcode custom_reset_workers2, echo=FALSE, results = 'hide'
+registerDoMC(cores=detectCores()-1)
+ end.rcode-->  
 <p>
 The speed-ups show a significant decrease in training time using this method.
 </p>
 
 <div id="Illustration3"></div>
-<h1>Illustrative Example 3: SMOTE During Resampling</h1>
+<h1>Illustrative Example 3: Nonstandard Formulas</h1>
 
 <p>
-Other example is related to class imbalances. It might be helpful to sample the data so that  the classes have a more balanced frequency distribution in the training set. One way to do this is the <a href="http://scholar.google.com/scholar?hl=en&q=SMOTE">SMOTE algorithm</a> where the majority class is down-sampled while new instances are imputed in the minority class. To get a good sense of what the performance will be using cross-validation, we should run SMOTE within each resample (instead of once prior to the model training). 
+(Note: the previous third illustration ("SMOTE During Resampling") is no longer needed due to the inclusion of subsampling via <span class="mx funCall">train</span>.)
 </p>
 <p>
-To do this, we will only modify the <span class="mx arg">fit</span> function. Suppose we want to fit an LDA model. First, we get the functions, then modify them:
+One limitation of <span class="mx funCall">train</span> is that it requires the use of basic model formulas. There are several functions that use special formulas or operators on predictors that won't  (and perhaps should not) work in the top level call to <span class="mx funCall">train</span>. However, we can still fit these models. 
 </p>
-<!--begin.rcode custom_lda_mod, tidy=FALSE
-ldaInfo <- getModelInfo("lda", regex = FALSE)[[1]]
-ldaInfo$fit
-ldaInfo$fit <- function(x, y, wts, param, lev, last, classProbs, ...) {
-  library(DMwR)
-  tmp <- as.data.frame(x)
-  tmp$Class <- y
-  smoted <- SMOTE(Class ~ ., data = tmp)
-  lda(smoted[, names(smoted) != "Class"], smoted$Class, ...)
-  }
+<p>
+Here is an example using the <span class="mx funCall">mboost</span> function in the <strong>mboost</strong> package from the help page. 
+</p>
+<!--begin.rcode custom_mboost_orig, tidy=FALSE
+library(mboost)
+data("bodyfat", package = "TH.data")
+mod <- mboost(DEXfat ~ btree(age) + bols(waistcirc) + bbs(hipcirc),
+              data = bodyfat)
+mod
 end.rcode--> 
 
-<p> We can simulate some data with a class imbalance and test this model and the usual LDA model.</p>
+<p> 
+We can create a custom model that mimics this code so that we can obtain resampling estimates for this specific model:
+</p>
 
-<!--begin.rcode custom_lda_data, tidy=FALSE
-set.seed(1135)
-imbal_train <- twoClassSim(n =  300, intercept = -17)
-imbal_test  <- twoClassSim(n = 2000, intercept = -17)
-table(imbal_train$Class)
+<!--begin.rcode custom_mboost_code, tidy=FALSE
+modelInfo <- list(label = "Model-based Gradient Boosting",
+                  library = "mboost",
+                  type = "Regression",
+                  parameters = data.frame(parameter = "parameter",
+                                          class = "character",
+                                          label = "parameter"),
+                  grid = function(x, y, len = NULL, search = "grid") 
+                    data.frame(parameter = "none"),
+                  loop = NULL,
+                  fit = function(x, y, wts, param, lev, last, classProbs, ...) {          
+                    ## mboost requires a data frame with predictors and response
+                    dat <- if(is.data.frame(x)) x else as.data.frame(x)
+                    dat$DEXfat <- y
+                    mod <- mboost(DEXfat ~ btree(age) + bols(waistcirc) + bbs(hipcirc),
+                                  data = dat)
+                    },
+                  predict = function(modelFit, newdata, submodels = NULL) {
+                    if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
+                    ## By default a matrix is returned; we convert it to a vector
+                    predict(modelFit, newdata)[,1]
+                  },
+                  prob = NULL,
+                  predictors = function(x, ...) {
+                    unique(as.vector(variable.names(x)))
+                  },
+                  tags = c("Ensemble Model", "Boosting", "Implicit Feature Selection"),
+                  levels = NULL,
+                  sort = function(x) x)
+
 end.rcode--> 
 
-<!--begin.rcode custom_lda_both, tidy=FALSE
-ldaCtrl <- trainControl(method = "repeatedcv", repeats = 10,
-                        classProbs = TRUE, 
-                        summaryFunction = twoClassSummary)
-set.seed(346)
-ldaFit <- train(Class ~ ., data = imbal_train,
-                method = "lda",
-                metric = "ROC",
-                trControl = ldaCtrl)
-set.seed(346)
-ldaDSFit <- train(Class ~ ., data = imbal_train,
-                  method = ldaInfo,
-                  metric = "ROC",
-                  trControl = ldaCtrl)
-
-ldaProb1 <- predict(ldaFit, imbal_test, type = "prob")[,1]
-ldaProb2 <- predict(ldaDSFit, imbal_test, type = "prob")[,1]
-
-roc(imbal_test$Class, ldaProb1, levels = rev(levels(imbal_test$Class)))
-roc(imbal_test$Class, ldaProb2, levels = rev(levels(imbal_test$Class)))
-
+<!--begin.rcode custom_mboost_cv, tidy=FALSE
+## Just use the basic formula method so that these predictors
+## are passed 'as-is' into the model fitting and prediction
+## functions.
+set.seed(307)
+mboost_resamp <- train(DEXfat ~ age + waistcirc + hipcirc, 
+                       data = bodyfat, 
+                       method = modelInfo,
+                       trControl = trainControl(method = "repeatedcv",
+                                                repeats = 5))
+mboost_resamp
 end.rcode--> 
 
-<p> For these data, SMOTE didn't seem to make much of a difference. </p>
 
 <div id="Illustration4"></div>
 <h1>Illustrative Example 4: PLS Feature Extraction Pre-Processing</h1>
@@ -782,18 +828,23 @@ pls_rf <- list(label = "PLS-RF",
                                        class = c("numeric", 'numeric'),
                                        label = c('#Components', 
                                                  '#Randomly Selected Predictors')),
-               grid = function(x, y, len = NULL) {
-                 grid <- expand.grid(ncomp = seq(1, min(ncol(x) - 1, len), by = 1),
-                                     mtry = 1:len)
+               grid = function(x, y, len = NULL, search = "grid") {
+                 if(search == "grid") {
+                   grid <- expand.grid(ncomp = seq(1, min(ncol(x) - 1, len), by = 1),
+                                       mtry = 1:len)
+                   } else {
+                     grid <- expand.grid(ncomp = sample(1:ncol(x), size = len),
+                                         mtry = sample(1:ncol(x), size = len))
+                     }
                  ## We can't have mtry > ncomp
                  grid <- subset(grid, mtry <= ncomp)
-               },
+                 },
                loop = NULL,
                fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
                  ## First fit the pls model, generate the training set scores,
                  ## then attach what is needed to the random forest object to 
                  ## be used later
-
+                 
                  ## plsr only has a formula interface so create one data frame
                  dat <- if(!is.data.frame(x)) x <- as.data.frame(x)
                  dat$y <- y
@@ -803,7 +854,7 @@ pls_rf <- list(label = "PLS-RF",
                  mod <- randomForest(scores, y, mtry = param$mtry, ...)
                  mod$projection <- pre$projection
                  mod
-               },
+                 },
                predict = function(modelFit, newdata, submodels = NULL) {  
                  ## Now apply the same scaling to the new samples
                  scores <- as.matrix(newdata)  %*% modelFit$projection
@@ -811,7 +862,7 @@ pls_rf <- list(label = "PLS-RF",
                  scores <- as.data.frame(scores)
                  ## Predict the random forest model
                  predict(modelFit, scores)
-               },
+                 },
                prob = NULL,
                varImp = NULL,
                predictors = function(x, ...) rownames(x$projection),
@@ -934,27 +985,33 @@ thresh_code$parameters <- data.frame(parameter = c("mtry", "threshold"),
                                      label = c("#Randomly Selected Predictors",
                                                "Probability Cutoff"))
 ## The default tuning grid code:
-thresh_code$grid <- function(x, y, len = NULL) {
+thresh_code$grid <- function(x, y, len = NULL, search = "grid") {
   p <- ncol(x)
-  expand.grid(mtry = floor(sqrt(p)), 
-              threshold = seq(.01, .99, length = len))
+  if(search == "grid") {
+    grid <- expand.grid(mtry = floor(sqrt(p)), 
+                        threshold = seq(.01, .99, length = len))
+    } else {
+      grid <- expand.grid(mtry = sample(1:p, size = len),
+                          threshold = runif(1, 0, size = len))
+      }
+  grid
   }
 
 ## Here we fit a single random forest model (with a fixed mtry)
 ## and loop over the threshold values to get predictions from the same
 ## randomForest model.
 thresh_code$loop = function(grid) {   
-                 library(plyr)
-                 loop <- ddply(grid, c("mtry"),
-                               function(x) c(threshold = max(x$threshold)))
-                 submodels <- vector(mode = "list", length = nrow(loop))
-                 for(i in seq(along = loop$threshold)) {
-                   index <- which(grid$mtry == loop$mtry[i])
-                   cuts <- grid[index, "threshold"] 
-                   submodels[[i]] <- data.frame(threshold = cuts[cuts != loop$threshold[i]])
-                 }    
-                 list(loop = loop, submodels = submodels)
-               }
+  library(plyr)
+  loop <- ddply(grid, c("mtry"),
+                function(x) c(threshold = max(x$threshold)))
+  submodels <- vector(mode = "list", length = nrow(loop))
+  for(i in seq(along = loop$threshold)) {
+    index <- which(grid$mtry == loop$mtry[i])
+    cuts <- grid[index, "threshold"] 
+    submodels[[i]] <- data.frame(threshold = cuts[cuts != loop$threshold[i]])
+    }    
+  list(loop = loop, submodels = submodels)
+  }
 
 ## Fit the model independent of the threshold parameter
 thresh_code$fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
@@ -1072,40 +1129,84 @@ Now we can use the test set ROC curve to validate the cut off we chose by resamp
 One great thing about this code is that it will automatically apply the optimized probability threshold when predicting new samples. 
 </p>
 
-    
+ 
+<div id="Illustration6"></div>
+<h1>Illustrative Example 6: Offsets in Generalized Linear Models</h1>
+
+<p>
+Like the <span class="mx funCall">mboost</span> example <a href="#Illustration3">above</a>, a custom method is required since a formula element is used to set the offset variable. Here is an example from <tt>?</tt><span class="mx funCall">glm</span>:
+</p>
+<!--begin.rcode custom_glm_offset, tidy=FALSE,echo=FALSE
+utils::data(anorexia, package = "MASS")
+
+anorex.1 <- glm(Postwt ~ Prewt + Treat + offset(Prewt), data = anorexia)
+coef(anorex.1)
+    end.rcode--> 
+<p>
+We can write a small custom method to duplicate this model. Two details of note:
+</p>
+<ul>
+  <li>
+  If we have factors in the data and do not want <span class="mx funCall">train</span> to convert them to dummy variables, the formula method for <span class="mx funCall">train</span> should be avoided. We can let <span class="mx funCall">glm</span> do that inside the custom method. This would help <span class="mx funCall">glm</span> understand that the dummy variable columns came from the same original factor. This will avoid errors in other functions used with <span class="mx funCall">glm</span> (e.g. <span class="mx funCall">anova</span>).
+  </li>
+  <li>
+  The slot for <span class="mx arg">x</span> should include any variables that are on the right-hand side of the model formula, including the offset column. 
+  </li>
+</ul>
+<p>
+Here is the custom model:
+</p>
+<!--begin.rcode custom_train_offset, tidy=FALSE
+offset_mod <- getModelInfo("glm", regex = FALSE)[[1]]
+offset_mod$fit <- function(x, y, wts, param, lev, last, classProbs, ...) {
+  dat <- if(is.data.frame(x)) x else as.data.frame(x)
+  dat$Postwt <- y
+  glm(Postwt ~ Prewt + Treat + offset(Prewt), family = gaussian, data = dat)
+}
+
+mod <- train(x = anorexia[, 1:2], y = anorexia$Postwt, method = offset_mod)
+coef(mod$finalModel)
+    end.rcode--> 
+   
 <div style="clear: both;">&nbsp;</div>
   </div>
   <!-- end #content -->
 <div id="sidebar">
-  <ul>
+<ul>
   <li>
-  <h2>Links</h2>
-  <p><a href="modelList.html"><tt>train</tt> Model List</a></p>
+    <h2>General Topics</h2>
+    <ul>
+      <li><a href="index.html">Front Page</a></li>
+      <li><a href="visualizations.html">Visualizations</a></li>
+      <li><a href="preprocess.html">Pre-Processing</a><li>
+      <li><a href="splitting.html">Data Splitting</a></li>
+      <li><a href="varimp.html">Variable Importance</a></li>
+      <li><a href="other.html">Model Performance</a></li>
+      <li><a href="parallel.html">Parallel Processing</a></li>
+    </ul>
+    <h2>Model Training and Tuning</h2>
+    <ul>
+      <li><a href="training.html">Basic Syntax</a></li>
+      <li><a href="modelList.html">Sortable Model List</a></li>
+      <li><a href="bytag.html">Models By Tag</a></li>
+      <li><a href="similarity.html">Models By Similarity</a></li>
+      <li><a href="custom_models.html">Using Custom Models</a></li>
+      <li><a href="sampling.html">Sampling for Class Imbalances</a></li> 
+      <li><a href="random.html">Random Search</a></li> 
+      <li><a href="adaptive.html">Adaptive Resampling</a></li> 
+    </ul>
+    <h2>Feature Selection</h2>
+    <ul>
+      <li><a href="featureselection.html">Overview</a>
+      <li><a href="rfe.html">RFE</a></li>
+      <li><a href="filters.html">Filters</a></li>
+      <li><a href="GA.html">GA</a></li>
+      <li><a href="SA.html">SA</a></li>
+    </ul>  
   </li>
-  <li>
-  <h2>Topics</h2>
-  <ul>
-          <li><a href="index.html">Main Page</a></li>
-      <li><a href="datasets.html">Data Sets</a></li>
-                <li><a href="visualizations.html">Visualizations</a></li>
-                <li><a href="preprocess.html">Pre-Processing</a></li>
-                <li><a href="splitting.html">Data Splitting</a></li>
-                <li><a href="misc.html">Miscellaneous Model Functions</a></li>
-                <li><a href="training.html">Model Training and Tuning</a></li>
-                <li><a href="modelList.html"><tt>train</tt> Model List</a></li>
-                <li><a href="bytag.html"><tt>train</tt> Models By Tag</a></li>
-                 <li><a href="similarity.html"><tt>train</tt> Models By Similarity</a></li>
-                <li><a href="custom_models.html">Using Custom Models</a></li>
-                <li><a href="varimp.html">Variable Importance</a></li>
-                <li><a href="featureselection.html">Feature Selection</a></li>
-                <li><a href="other.html">Other Functions</a></li>
-                <li><a href="parallel.html">Parallel Processing</a></li>
-                <li><a href="adaptive.html">Adaptive Resampling</a></li>
 </ul>
-  </li>
-  </ul>
-  </div>
-  <!-- end #sidebar -->
+</div>
+<!-- end #sidebar -->
 <div style="clear: both;">&nbsp;</div>
   </div>
   <div class="container"><img src="images/img03.png" width="1000" height="40" alt="" /></div>

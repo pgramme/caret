@@ -5,9 +5,16 @@ modelInfo <- list(label = "Extreme Learning Machine",
                   parameters = data.frame(parameter = c('nhid', 'actfun'),
                                           class = c("numeric", "character"),
                                           label = c('#Hidden Units', 'Activation Function')),
-                  grid = function(x, y, len = NULL) expand.grid(nhid = ((1:len) * 2) - 1, 
-                                                                actfun = c("sin", "radbas", 
-                                                                           "purelin", "tansig")),
+                  grid = function(x, y, len = NULL, search = "grid") {
+                    funs <- c("sin", "radbas", "purelin", "tansig")
+                    if(search == "grid") {
+                      out <- expand.grid(nhid = ((1:len) * 2) - 1, actfun = funs)
+                    } else {
+                      out <- data.frame(nhid = floor(runif(len, min = 1, max = 20)),
+                                        actfun = sample(funs, replace = TRUE, size = len))
+                    }
+                    out[!duplicated(out),]
+                  },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     if(is.factor(y)) {
                       factor2ind <- function(x) {
@@ -19,19 +26,30 @@ modelInfo <- list(label = "Extreme Learning Machine",
                         attributes(x) <- att
                         x
                       }
-                      out <- elmtrain(x = x, y = factor2ind(y), 
-                                      nhid = param$nhid, actfun = param$actfun, ...)
+                      out <- elmNN::elmtrain.default(
+                        x = x, 
+                        y = factor2ind(y), 
+                        nhid = param$nhid, 
+                        actfun = param$actfun, 
+                        ...
+                        )
                       out$lev <- levels(y)
                       
                     } else {
-                      out <- elmtrain(x = x, y = y, nhid = param$nhid, actfun = param$actfun, ...)
+                      out <- elmNN::elmtrain.default(
+                        x = x, 
+                        y = y, 
+                        nhid = param$nhid, 
+                        actfun = param$actfun, 
+                        ...
+                        )
                     }
                     out$xNames <- colnames(x)
                     out
                   },
                   predict = function(modelFit, newdata, submodels = NULL)
                   {
-                    out <- predict(modelFit, newdata, type="class")
+                    out <- elmNN::predict.elmNN(modelFit, newdata)
                     if(modelFit$problemType == "Classification") {
                       out <- modelFit$lev[apply(out, 1, which.max)]
                       out <- factor(out, levels = modelFit$lev)

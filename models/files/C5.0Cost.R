@@ -1,7 +1,7 @@
 modelInfo <- list(label = "Cost-Sensitive C5.0",
                   library = c("C50", "plyr"),
                   loop = function(grid) {     
-                    loop <- ddply(grid, c("model", "winnow", "cost"),
+                    loop <- plyr::ddply(grid, c("model", "winnow", "cost"),
                                   function(x) c(trials = max(x$trials)))                 
                     
                     submodels <- vector(mode = "list", length = nrow(loop))
@@ -19,11 +19,22 @@ modelInfo <- list(label = "Cost-Sensitive C5.0",
                   parameters = data.frame(parameter = c('trials', 'model', 'winnow', "cost"),
                                           class = c("numeric", "character", "logical", "numeric"),
                                           label = c('# Boosting Iterations', 'Model Type', 'Winnow', "Cost")),
-                  grid = function(x, y, len = NULL) {
+                  grid = function(x, y, len = NULL, search = "grid") {
                     c5seq <- if(len == 1)  1 else  c(1, 10*((2:min(len, 11)) - 1))
                     expand.grid(trials = c5seq, model = c("tree", "rules"), 
                                 winnow = c(TRUE, FALSE),
                                 cost = 1:2)
+                    if(search == "grid") {
+                      c5seq <- if(len == 1)  1 else  c(1, 10*((2:min(len, 11)) - 1))
+                      out <- expand.grid(trials = c5seq, model = c("tree", "rules"), 
+                                         winnow = c(TRUE, FALSE), cost = 1:2)
+                    } else {
+                      out <- data.frame(trials = sample(1:100, replace = TRUE, size = len),
+                                        model = sample(c("tree", "rules"), replace = TRUE, size = len),
+                                        winnow = sample(c(TRUE, FALSE), replace = TRUE, size = len),
+                                        cost = runif(len, min = 1, max = 20))
+                    }
+                    out    
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) { 
                     theDots <- list(...)
@@ -31,7 +42,7 @@ modelInfo <- list(label = "Cost-Sensitive C5.0",
                     if(any(names(theDots) == "control"))
                     {                           
                       theDots$control$winnow <- param$winnow
-                    } else theDots$control <- C5.0Control(winnow = param$winnow)
+                    } else theDots$control <- C50::C5.0Control(winnow = param$winnow)
                     
                     argList <- list(x = x, y = y, weights = wts, trials = param$trials,
                                     rules = param$model == "rules")
@@ -44,7 +55,7 @@ modelInfo <- list(label = "Cost-Sensitive C5.0",
                     } else argList$costs <- cmat
                     
                     argList <- c(argList, theDots)
-                    do.call("C5.0.default", argList)
+                    do.call(C50:::C5.0.default, argList)
                     },
                   predict = function(modelFit, newdata, submodels = NULL) {
                     out <- predict(modelFit, newdata)
@@ -62,13 +73,22 @@ modelInfo <- list(label = "Cost-Sensitive C5.0",
                   },
                   prob = NULL,
                   predictors = function(x, ...) {
-                    vars <- C5imp(x, metric = "splits")
+                    vars <- C50::C5imp(x, metric = "splits")
                     rownames(vars)[vars$Overall > 0]
                   },
-                  varImp = function(object, ...) C5imp(object, ...),
+                  levels = function(x) x$obsLevels,
+                  varImp = function(object, ...) C50::C5imp(object, ...),
                   tags = c("Tree-Based Model", "Rule-Based Model", "Implicit Feature Selection",
-                  	       "Boosting", "Ensemble Model", "Cost Sensitive Learning"),
+                  	       "Boosting", "Ensemble Model", "Cost Sensitive Learning", "Two Class Only", 
+                           "Handle Missing Predictor Data", "Accepts Case Weights"),
                   sort = function(x){
                     x$model <- factor(as.character(x$model), levels = c("rules", "tree"))
                     x[order(x$trials, x$model, !x$winnow, x$cost),]
+                  },
+                  trim = function(x) {
+                    x$boostResults <- NULL
+                    x$size <- NULL
+                    x$call <- NULL
+                    x$output <- NULL
+                    x
                   })

@@ -5,18 +5,15 @@ modelInfo <- list(label = "Conditional Inference Random Forest",
                   parameters = data.frame(parameter = 'mtry',
                                           class = 'numeric',
                                           label = "#Randomly Selected Predictors"),
-                  grid = function(x, y, len = NULL) {
-                    p <- ncol(x) 
-                    tuneSeq <- if(p <= len) floor(seq(2, to = p, length = p))
-                    else  seq(from = 2, by = 2, length.out = len)
-                    if(any(table(tuneSeq) > 1))
-                    {
-                      tuneSeq <- unique(tuneSeq)
-                      cat("note: only", length(tuneSeq), 
-                          "unique complexity parameters in default grid.",
-                          "Truncating the grid to", length(tuneSeq), ".\n\n")      
+                  grid = function(x, y, len = NULL, search = "grid"){
+                    if(search == "grid") {
+                      out <- data.frame(mtry = caret::var_seq(p = ncol(x), 
+                                                              classification = is.factor(y), 
+                                                              len = len))
+                    } else {
+                      out <- data.frame(mtry = unique(sample(1:ncol(x), replace = TRUE, size = len)))
                     }
-                    data.frame(mtry = tuneSeq)
+                    out
                   },
                   fit = function(x, y, wts, param, lev, last, classProbs, ...) {
                     dat <- if(is.data.frame(x)) x else as.data.frame(x)
@@ -28,9 +25,9 @@ modelInfo <- list(label = "Conditional Inference Random Forest",
                       theDots$controls@gtctrl@mtry <- as.integer(param$mtry) 
                       ctl <- theDots$controls
                       theDots$controls <- NULL
-                      
-                    } else ctl <- cforest_control(mtry = param$mtry)
-                    
+
+                    } else ctl <- party::cforest_control(mtry = param$mtry)
+
                     ## pass in any model weights
                     if(!is.null(wts)) theDots$weights <- wts
                     
@@ -38,12 +35,12 @@ modelInfo <- list(label = "Conditional Inference Random Forest",
                                         data = dat,
                                         controls = ctl),
                                    theDots)
-                    
-                    out <- do.call(getFromNamespace("cforest", "party"), modelArgs)
-                    out 
+
+                    out <- do.call(party::cforest, modelArgs)
+                    out
                   },
-                  predict = function(modelFit, newdata, submodels = NULL) {
-                    if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
+                  predict = function(modelFit, newdata = NULL, submodels = NULL) {
+                    if(!is.null(newdata) && !is.data.frame(newdata)) newdata <- as.data.frame(newdata)
                     ## party builds the levels into the model object, so I'm
                     ## going to assume that all the levels will be passed to
                     ## the output
@@ -53,10 +50,10 @@ modelInfo <- list(label = "Conditional Inference Random Forest",
                     
                     out
                   },
-                  prob = function(modelFit, newdata, submodels = NULL) {
-                    if(!is.data.frame(newdata)) newdata <- as.data.frame(newdata)
+                  prob = function(modelFit, newdata = NULL, submodels = NULL) {
+                    if(!is.null(newdata) && !is.data.frame(newdata)) newdata <- as.data.frame(newdata)
                     obsLevels <- levels(modelFit@data@get("response")[,1])
-                    rawProbs <- treeresponse(modelFit, newdata)
+                    rawProbs <- party::treeresponse(modelFit, newdata, OOB = TRUE)
                     probMatrix <- matrix(unlist(rawProbs), ncol = length(obsLevels), byrow = TRUE)
                     out <- data.frame(probMatrix)
                     colnames(out) <- obsLevels
@@ -72,6 +69,11 @@ modelInfo <- list(label = "Conditional Inference Random Forest",
                     out <- data.frame(Overall = variableImp)
                     out
                   },
-                  tags = c("Random Forest", "Ensemble Model", "Bagging", "Implicit Feature Selection"),
+                  tags = c("Random Forest", "Ensemble Model", "Bagging", "Implicit Feature Selection", "Accepts Case Weights"),
                   levels = function(x) levels(x@data@get("response")[,1]),
-                  sort = function(x) x[order(x[,1]),])
+                  sort = function(x) x[order(x[,1]),],
+                  oob = function(x) {
+                    obs <- x@data@get("response")[,1]
+                    pred <- predict(x, OOB = TRUE)
+                    postResample(pred, obs)
+                  })
